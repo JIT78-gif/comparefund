@@ -1,54 +1,49 @@
 
 
-## Clean Up Compare Page UI + Fix Standard/NP Type
+## Fix: Liabilities, Unit Variation, and NP Fund Type
 
-### Problems Identified
-1. The Standard/NP toggle does nothing -- the edge function ignores fund type entirely
-2. The UI is missing key elements shown in the reference: a rich data table with Type column, Fund Details section with raw CVM data, and a Unit Variation chart
-3. The current layout needs polish to match the reference screenshots
+### Issues Found (from edge function logs)
+
+1. **Liabilities always R$ 0.00** -- The code declares `fundLiabilities` map but never populates it. Tab III (passivos/liabilities) is not in the `targetTables` array, so it's never parsed.
+
+2. **Unit Variation always 0%** -- The `unit_value` field is never assigned anywhere. Tab IV contains a quota/unit value field that needs to be extracted.
+
+3. **Fund type always STANDARD** -- The column `TP_FUNDO` in tab_I may not exist or contain the expected values. Also, the `fundType` parameter received from the frontend is never used to filter results.
+
+---
 
 ### Changes
 
-#### 1. Edge Function (`supabase/functions/cvm-compare/index.ts`)
-- Return additional fields: `fund_name`, `liabilities`, and `fund_type` for each company
-- Parse fund names from the CSV data (tab_IV has fund identification)
-- Extract liabilities data from the relevant table
-- Return a `details` array with per-fund raw data (name, CNPJ, period, net_assets, portfolio, liabilities, overdue) for the Fund Details section
+#### Edge Function (`supabase/functions/cvm-compare/index.ts`)
 
-#### 2. Compare Page (`src/pages/Compare.tsx`) -- Full UI Redesign
-Based on the reference screenshots:
+**Add tab_III to parsed tables:**
+- Add `"tab_III"` to the `targetTables` array
+- Parse tab_III CSV looking for the liabilities column (e.g., `TAB_III_A_VL_PASSIVO` or similar passivo field)
+- Populate `fundLiabilities[cnpj]` and `results[company].liabilities`
 
-**Metric Cards (top row):** Keep the 4 cards but ensure they show correct data with proper icons:
-- Multiplica PL (green dot icon)
-- Red PL (red/orange dot icon)  
-- Multiplica Delinq. (chart icon)
-- Red Delinq. (chart icon)
+**Extract unit value from tab_IV:**
+- Look for `TAB_IV_VL_QUOTA` or `TAB_IV_A_VL_COTA` column in tab_IV rows
+- For each company, compute unit variation as percentage change (requires fetching previous month data, or using the quota variation field if available)
+- Alternatively, look for a quota variation column directly in the data
 
-**Charts section:** Expand from 2 to 3 charts in a row:
-- Total Assets (B) -- bar chart
-- Delinquency Rate (%) -- bar chart
-- Unit Variation (%) -- bar chart (new)
+**Fix fund type detection:**
+- Log tab_I headers to identify the correct column for NP vs STANDARD classification (likely `CLASSE_SERIE` or `CONDOM` rather than `TP_FUNDO`)
+- Common NP indicators: fund name contains "NAO PADRONIZADO" or "NP", or a specific CVM classification field
+- As a reliable fallback, check if the fund name (DENOM_SOCIAL) contains "NAO PADRONIZADO" or "NP"
 
-**Data Table:** Replace current simple table with a richer one matching the reference:
-- Columns: Company (with colored dot), Assets, # Funds, Delinquency %, Unit Var %, Type (pill badge)
-- Color-coded delinquency pills (green for low values)
-- Type shown as a styled pill/badge ("STANDARD" or "NP")
+**Use fundType parameter for filtering:**
+- After building the details array, filter results to only include funds matching the requested `fundType` (STANDARD or NP)
+- Recalculate aggregated metrics after filtering
 
-**Fund Details section (new):** Add a "FUND DETAILS -- RAW CVM DATA" section below the table:
-- Card per fund showing: full fund name, CNPJ, period
-- 4 metrics in a row: Net Assets (PL), Portfolio, Liabilities, Overdue
-- Values in green for assets/portfolio, orange for liabilities
+#### Frontend (`src/pages/Compare.tsx`)
 
-**Standard/NP toggle:** Wire it to actually filter data -- pass `fundType` to the edge function so it can return the correct fund classification. Since each CNPJ may only be one type, the toggle will filter which funds to show.
+- No changes needed -- the frontend already renders liabilities, unit variation chart, and fund type badges correctly. The issue is purely backend data.
 
-#### 3. MetricCard Component
-- Minor cleanup if needed, but largely stays the same
+### Technical Sequence
 
-### Technical Details
-
-- The edge function will be updated to accept an optional `fundType` parameter and return enriched data including `fund_name`, `liabilities`, and per-fund details
-- The response shape changes to include a `details` array alongside the aggregated metrics
-- The frontend `queryKey` will include `fundType` so switching types triggers a refetch
-- Charts will use a 3-column grid on desktop
-- The data table and fund details section use the existing design system colors and typography
+1. Add `tab_III` parsing for liabilities
+2. Add unit value / quota extraction from tab_IV
+3. Fix fund type detection using fund name as fallback
+4. Apply `fundType` filter before returning results
+5. Deploy and test with both Standard and NP toggles
 
