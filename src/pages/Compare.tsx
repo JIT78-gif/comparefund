@@ -1,20 +1,49 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, MONTHS } from "@/lib/format";
 
+interface CompanyData {
+  net_assets: number;
+  portfolio: number;
+  overdue: number;
+  delinquency: number;
+  unit_value: number;
+  fund_count: number;
+  liabilities: number;
+  fund_type: string;
+}
+
+interface FundDetail {
+  company: string;
+  fund_name: string;
+  cnpj: string;
+  period: string;
+  net_assets: number;
+  portfolio: number;
+  liabilities: number;
+  overdue: number;
+  fund_type: string;
+}
+
+interface CompareResponse {
+  multiplica: CompanyData;
+  red: CompanyData;
+  details: FundDetail[];
+}
 
 const Compare = () => {
   const [year, setYear] = useState(2024);
-  const [month, setMonth] = useState(5); // June (0-indexed)
+  const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["compare", year, month + 1],
+    queryKey: ["compare", year, month + 1, fundType],
     queryFn: async () => {
       const refMonth = `${year}${String(month + 1).padStart(2, "0")}`;
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
@@ -31,7 +60,7 @@ const Compare = () => {
               apikey: anonKey,
               Authorization: `Bearer ${anonKey}`,
             },
-            body: JSON.stringify({ refMonth }),
+            body: JSON.stringify({ refMonth, fundType }),
             signal: controller.signal,
           }
         );
@@ -40,10 +69,7 @@ const Compare = () => {
           const err = await res.json();
           throw new Error(err.error || `HTTP ${res.status}`);
         }
-        return (await res.json()) as {
-          multiplica: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
-          red: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
-        };
+        return (await res.json()) as CompareResponse;
       } finally {
         clearTimeout(timeout);
       }
@@ -56,18 +82,23 @@ const Compare = () => {
 
   const chartData = data
     ? [
-        {
-          name: "Multiplica",
-          assets: data.multiplica.net_assets,
-          delinquency: data.multiplica.delinquency,
-        },
-        {
-          name: "Red",
-          assets: data.red.net_assets,
-          delinquency: data.red.delinquency,
-        },
+        { name: "Multiplica", assets: data.multiplica.net_assets, delinquency: data.multiplica.delinquency, unitVar: data.multiplica.unit_value },
+        { name: "Red", assets: data.red.net_assets, delinquency: data.red.delinquency, unitVar: data.red.unit_value },
       ]
     : [];
+
+  const tableRows = data
+    ? [
+        { name: "Multiplica", color: "bg-primary", ...data.multiplica },
+        { name: "Red", color: "bg-accent", ...data.red },
+      ]
+    : [];
+
+  const tooltipStyle = {
+    background: "hsl(228 20% 7%)",
+    border: "1px solid hsl(230 20% 15%)",
+    borderRadius: 4,
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,8 +113,7 @@ const Compare = () => {
             Multiplica vs Red
           </h1>
           <p className="font-serif font-light text-muted-foreground text-lg max-w-xl leading-relaxed">
-            Real-time FIDC comparison using official CVM data from dados.cvm.gov.br.
-            Select any month from 2019 to present.
+            Real-time FIDC comparison using official CVM data.
           </p>
         </div>
 
@@ -137,7 +167,7 @@ const Compare = () => {
           </div>
         </div>
 
-        {/* Loading / Error */}
+        {/* Loading */}
         {isLoading && (
           <div className="text-center py-20">
             <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
@@ -145,39 +175,40 @@ const Compare = () => {
           </div>
         )}
 
+        {/* Error */}
         {error && (
           <div className="border border-accent/30 bg-accent/5 p-4 rounded-sm text-accent text-sm">
-            Failed to load data: {(error as Error).message}. Data may not be available for this period.
+            Failed to load data: {(error as Error).message}
           </div>
         )}
 
-        {/* Metric Cards */}
         {data && (
           <>
+            {/* Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <MetricCard
-                icon={<div className="w-6 h-6 rounded-full bg-primary glow-green" />}
+                icon={<div className="w-5 h-5 rounded-full bg-primary glow-green" />}
                 label="Multiplica PL"
                 value={formatCurrency(data.multiplica.net_assets)}
                 subtitle={`Portfolio: ${formatCurrency(data.multiplica.portfolio)}`}
                 color="green"
               />
               <MetricCard
-                icon={<div className="w-6 h-6 rounded-full bg-accent glow-orange" />}
+                icon={<div className="w-5 h-5 rounded-full bg-accent glow-orange" />}
                 label="Red PL"
                 value={formatCurrency(data.red.net_assets)}
                 subtitle={`Portfolio: ${formatCurrency(data.red.portfolio)}`}
                 color="orange"
               />
               <MetricCard
-                icon={<span className="text-2xl">📊</span>}
+                icon={<span className="text-xl">📊</span>}
                 label="Multiplica Delinq."
                 value={formatPercent(data.multiplica.delinquency)}
                 subtitle="Overdue / Portfolio"
-                color="blue"
+                color="green"
               />
               <MetricCard
-                icon={<span className="text-2xl">📊</span>}
+                icon={<span className="text-xl">📊</span>}
                 label="Red Delinq."
                 value={formatPercent(data.red.delinquency)}
                 subtitle="Overdue / Portfolio"
@@ -185,82 +216,162 @@ const Compare = () => {
               />
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-              <div className="border border-border bg-card p-6 rounded-sm">
-                <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-6">
-                  Total Assets (R$)
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                    <XAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
-                    <Tooltip
-                      contentStyle={{ background: "#111318", border: "1px solid #1e2130", borderRadius: 4 }}
-                      labelStyle={{ color: "#e8eaf0" }}
-                      formatter={(value: number) => [formatCurrency(value), "Assets"]}
-                    />
-                    <Bar dataKey="assets" fill="hsl(160, 100%, 45%)" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            {/* Charts — 3 columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+              <ChartCard title="Total Assets (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
+                  <Bar dataKey="assets" fill="hsl(160, 100%, 45%)" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
 
-              <div className="border border-border bg-card p-6 rounded-sm">
-                <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-6">
-                  Delinquency Rate (%)
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                    <XAxis dataKey="name" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                    <Tooltip
-                      contentStyle={{ background: "#111318", border: "1px solid #1e2130", borderRadius: 4 }}
-                      labelStyle={{ color: "#e8eaf0" }}
-                      formatter={(value: number) => [formatPercent(value), "Delinquency"]}
-                    />
-                    <Bar dataKey="delinquency" fill="hsl(20, 100%, 57%)" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartCard title="Delinquency Rate (%)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Delinquency"]} />
+                  <Bar dataKey="delinquency" fill="hsl(20, 100%, 57%)" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Unit Variation (%)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Unit Var"]} />
+                  <Bar dataKey="unitVar" fill="hsl(221, 100%, 65%)" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
             </div>
 
             {/* Data Table */}
-            <div className="border border-border rounded-sm overflow-hidden">
+            <div className="border border-border rounded-sm overflow-hidden mb-8">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-tag">
-                    <th className="text-left p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">Company</th>
-                    <th className="text-right p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">Net Assets</th>
-                    <th className="text-right p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">Portfolio</th>
-                    <th className="text-right p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">Overdue</th>
-                    <th className="text-right p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">Delinquency %</th>
+                  <tr className="bg-muted/40">
+                    {["Company", "Assets", "# Funds", "Delinquency %", "Unit Var %", "Type"].map((h) => (
+                      <th key={h} className="text-left p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { name: "Multiplica", ...data.multiplica },
-                    { name: "Red", ...data.red },
-                  ].map((row) => (
+                  {tableRows.map((row) => (
                     <tr key={row.name} className="border-t border-border hover:bg-muted/20 transition-colors">
-                      <td className="p-4 text-foreground font-display font-semibold">{row.name}</td>
-                      <td className="p-4 text-right text-muted-foreground">{formatCurrency(row.net_assets)}</td>
-                      <td className="p-4 text-right text-muted-foreground">{formatCurrency(row.portfolio)}</td>
-                      <td className="p-4 text-right text-muted-foreground">{formatCurrency(row.overdue)}</td>
-                      <td className={`p-4 text-right font-mono ${row.delinquency > 5 ? "text-accent" : "text-primary"}`}>
-                        {formatPercent(row.delinquency)}
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${row.color}`} />
+                          <span className="font-display font-semibold text-foreground">{row.name}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-muted-foreground font-mono">{formatCurrency(row.net_assets)}</td>
+                      <td className="p-4 text-muted-foreground font-mono">{row.fund_count || 1}</td>
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className={`font-mono text-xs ${
+                            row.delinquency < 5
+                              ? "border-primary/40 text-primary bg-primary/10"
+                              : "border-accent/40 text-accent bg-accent/10"
+                          }`}
+                        >
+                          {formatPercent(row.delinquency)}
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-muted-foreground font-mono">{formatPercent(row.unit_value)}</td>
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] tracking-wider uppercase ${
+                            row.fund_type === "NP"
+                              ? "border-secondary/40 text-secondary bg-secondary/10"
+                              : "border-muted-foreground/30 text-muted-foreground bg-muted/30"
+                          }`}
+                        >
+                          {row.fund_type || "STANDARD"}
+                        </Badge>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {/* Fund Details */}
+            {data.details && data.details.length > 0 && (
+              <div>
+                <h3 className="font-display text-[11px] tracking-[3px] uppercase text-muted-foreground mb-4">
+                  Fund Details — Raw CVM Data
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.details.map((d) => (
+                    <div key={d.cnpj} className="border border-border bg-card rounded-sm p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-display font-semibold text-sm text-foreground leading-tight mb-1">
+                            {d.fund_name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground font-mono">
+                            CNPJ: {d.cnpj} · {d.period}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] tracking-wider uppercase ${
+                            d.fund_type === "NP"
+                              ? "border-secondary/40 text-secondary"
+                              : "border-muted-foreground/30 text-muted-foreground"
+                          }`}
+                        >
+                          {d.fund_type}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <DetailMetric label="Net Assets (PL)" value={formatCurrency(d.net_assets)} variant="green" />
+                        <DetailMetric label="Portfolio" value={formatCurrency(d.portfolio)} variant="green" />
+                        <DetailMetric label="Liabilities" value={formatCurrency(d.liabilities)} variant="orange" />
+                        <DetailMetric label="Overdue" value={formatCurrency(d.overdue)} variant="orange" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
     </div>
   );
 };
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-border bg-card p-5 rounded-sm">
+      <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5">
+        {title}
+      </h3>
+      <ResponsiveContainer width="100%" height={220}>
+        {children as React.ReactElement}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DetailMetric({ label, value, variant }: { label: string; value: string; variant: "green" | "orange" }) {
+  return (
+    <div>
+      <p className="text-[9px] tracking-[1px] uppercase text-muted-foreground mb-1">{label}</p>
+      <p className={`font-mono text-sm font-semibold ${variant === "green" ? "text-primary" : "text-accent"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 export default Compare;
