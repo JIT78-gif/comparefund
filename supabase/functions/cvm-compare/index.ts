@@ -2,8 +2,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 import JSZip from "npm:jszip@3.10.1";
 
 const CNPJS: Record<string, string[]> = {
-  multiplica: ["23216398000101"],
-  red: ["17250006000110"],
+  multiplica: ["23216398000101", "40211675000102"],
+  red: ["17250006000110", "11489344000122"],
 };
 
 function cleanCnpj(raw: string): string {
