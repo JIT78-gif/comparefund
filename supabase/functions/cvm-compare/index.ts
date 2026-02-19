@@ -6,6 +6,9 @@ const CNPJS: Record<string, string[]> = {
   red: ["17250006000110", "11489344000122"],
 };
 
+// CNPJs known to be NP but whose CVM fund name is truncated and misses "Não Padronizado"
+const NP_OVERRIDE: Set<string> = new Set(["40211675000102"]);
+
 function cleanCnpj(raw: string): string {
   return raw.replace(/[.\-\/]/g, "");
 }
@@ -131,7 +134,7 @@ Deno.serve(async (req) => {
           if (dtCompetIdx !== -1) fundPeriods[cnpj] = row[dtCompetIdx] || "";
 
           // Fund type detection: check TP_FUNDO, CONDOM, and fund name
-          let detectedType = "STANDARD";
+          let detectedType = NP_OVERRIDE.has(cnpj) ? "NP" : "STANDARD";
           if (tpFundoIdx !== -1) {
             const tp = (row[tpFundoIdx] || "").toUpperCase();
             if (tp.includes("NP") || tp.includes("NAO PADRONIZADO") || tp.includes("NÃO PADRONIZADO")) {
@@ -150,7 +153,9 @@ Deno.serve(async (req) => {
             detectedType = "NP";
           }
           fundTypes[cnpj] = detectedType;
-          console.log(`Fund ${cnpj} type=${detectedType}, name=${fundNames[cnpj]?.substring(0, 50)}`);
+          const rawTp = tpFundoIdx !== -1 ? (row[tpFundoIdx] || "") : "N/A";
+          const rawCondom = condominioIdx !== -1 ? (row[condominioIdx] || "") : "N/A";
+          console.log(`Fund ${cnpj} type=${detectedType}, tp_fundo_classe=${rawTp}, condom=${rawCondom}, name=${fundNames[cnpj]?.substring(0, 50)}`);
         }
       } else if (isTabIII) {
         // Tab III: liabilities (passivos)
