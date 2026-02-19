@@ -6,7 +6,7 @@ import {
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
 import { formatCurrency, formatPercent, MONTHS } from "@/lib/format";
-import { supabase } from "@/integrations/supabase/client";
+
 
 const Compare = () => {
   const [year, setYear] = useState(2024);
@@ -17,14 +17,36 @@ const Compare = () => {
     queryKey: ["compare", year, month + 1],
     queryFn: async () => {
       const refMonth = `${year}${String(month + 1).padStart(2, "0")}`;
-      const { data, error } = await supabase.functions.invoke("cvm-compare", {
-        body: { refMonth },
-      });
-      if (error) throw error;
-      return data as {
-        multiplica: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
-        red: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
-      };
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
+      try {
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/cvm-compare`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+            body: JSON.stringify({ refMonth }),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeout);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        return (await res.json()) as {
+          multiplica: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
+          red: { net_assets: number; portfolio: number; overdue: number; delinquency: number; unit_value: number };
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
     },
     retry: 1,
     staleTime: 1000 * 60 * 30,

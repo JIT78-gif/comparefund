@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       : `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/inf_mensal_fidc_${refMonth}.zip`;
 
     console.log(`Fetching: ${zipUrl}`);
-    const response = await fetch(zipUrl, { signal: AbortSignal.timeout(25000) });
+    const response = await fetch(zipUrl);
 
     if (!response.ok) {
       return new Response(
