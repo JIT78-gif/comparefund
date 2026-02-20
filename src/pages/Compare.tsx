@@ -87,12 +87,10 @@ const Compare = () => {
 
   const years = Array.from({ length: 17 }, (_, i) => 2010 + i);
 
-const chartData = data
-    ? COMPANIES.map((c, i) => {
+  const chartData = data
+    ? COMPANIES.map((c) => {
         const d = (data as Record<string, CompanyData>)[c.key];
-        if (!d || d.fund_count === 0) return null;
-        const cashDrag = d.net_assets > 0 ? (d.cash / d.net_assets) * 100 : 0;
-        return {
+        return d ? {
           name: c.label,
           assets: d.net_assets,
           delinquency: d.delinquency,
@@ -100,23 +98,15 @@ const chartData = data
           receivables: d.portfolio,
           cash: d.cash,
           shareholders: d.shareholders,
-          cashDrag,
-          chartColor: c.chartColor,
-        };
-      }).filter(Boolean) as Array<{
-        name: string; assets: number; delinquency: number; unitVar: number;
-        receivables: number; cash: number; shareholders: number; cashDrag: number;
-        chartColor: string;
-      }>
+        } : null;
+      }).filter(Boolean)
     : [];
 
-const tableRows = data
+  const tableRows = data
     ? COMPANIES.map((c) => {
         const d = (data as Record<string, CompanyData>)[c.key];
-        if (!d || d.fund_count === 0) return null;
-        const cashDrag = d.net_assets > 0 ? (d.cash / d.net_assets) * 100 : 0;
-        return { name: c.label, color: c.color, cashDrag, ...d };
-      }).filter(Boolean) as ({ name: string; color: string; cashDrag: number } & CompanyData)[]
+        return d ? { name: c.label, color: c.color, ...d } : null;
+      }).filter(Boolean) as ({ name: string; color: string } & CompanyData)[]
     : [];
 
   const tooltipStyle = {
@@ -264,31 +254,91 @@ const tableRows = data
               })}
             </div>
 
-            {/* Charts — grid */}
+            {/* Charts — 3x2 grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-              {[
-                { key: "assets", title: "Patrimônio Líquido (R$)", fmt: (v: number) => `${(v / 1e9).toFixed(1)}B`, tip: "PL", tipFmt: formatCurrency },
-                { key: "delinquency", title: "Inadimplência (%)", fmt: (v: number) => `${v.toFixed(1)}%`, tip: "Inadimplência", tipFmt: formatPercent },
-                { key: "unitVar", title: "Valor da Cota (%)", fmt: (v: number) => `${v.toFixed(2)}%`, tip: "Cota", tipFmt: formatPercent },
-                { key: "receivables", title: "Direitos Creditórios (R$)", fmt: (v: number) => `${(v / 1e9).toFixed(1)}B`, tip: "Recebíveis", tipFmt: formatCurrency },
-                { key: "cash", title: "Caixa / Disponibilidades (R$)", fmt: (v: number) => `${(v / 1e6).toFixed(0)}M`, tip: "Caixa", tipFmt: formatCurrency },
-                { key: "shareholders", title: "Quantidade de Cotistas", fmt: (v: number) => String(Math.round(v)), tip: "Cotistas", tipFmt: formatNumber },
-                { key: "cashDrag", title: "Cash Drag (%)", fmt: (v: number) => `${v.toFixed(1)}%`, tip: "Cash Drag", tipFmt: formatPercent },
-              ].map((chart) => (
-                <ChartCard key={chart.key} title={chart.title}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                    <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={chart.fmt} />
-                    <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [chart.tipFmt(value), chart.tip]} />
-                    <Bar dataKey={chart.key} radius={[3, 3, 0, 0]}>
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.chartColor} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ChartCard>
-              ))}
+              <ChartCard title="Patrimônio Líquido (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "PL"]} />
+                  <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Inadimplência (%)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Inadimplência"]} />
+                  <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Valor da Cota (%)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Cota"]} />
+                  <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Direitos Creditórios (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Recebíveis"]} />
+                  <Bar dataKey="receivables" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Caixa / Disponibilidades (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Caixa"]} />
+                  <Bar dataKey="cash" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Quantidade de Cotistas">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatNumber(value), "Cotistas"]} />
+                  <Bar dataKey="shareholders" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
             </div>
 
             {/* Data Table */}
@@ -296,7 +346,7 @@ const tableRows = data
               <table className="w-full text-sm md:text-base">
                 <thead>
                   <tr className="bg-muted/40">
-                     {["Company", "PL", "Receivables", "Cash", "Cash Drag %", "Shareholders", "Delinq. %", "Unit Var %", "Subordinação", "Type"].map((h) => (
+                    {["Company", "PL", "Receivables", "Cash", "Shareholders", "Delinq. %", "Unit Var %", "Subordinação", "Type"].map((h) => (
                       <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
                         {h}
                       </th>
@@ -315,13 +365,6 @@ const tableRows = data
                       <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
                       <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.portfolio)}</td>
                       <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.cash)}</td>
-                      <td className="p-3 md:p-4 font-mono">
-                        <Badge variant="outline" className={`font-mono text-xs ${
-                          row.cashDrag > 15 ? "border-accent/40 text-accent bg-accent/10" : "border-primary/40 text-primary bg-primary/10"
-                        }`}>
-                          {formatPercent(row.cashDrag)}
-                        </Badge>
-                      </td>
                       <td className="p-3 md:p-4 text-foreground font-mono">{formatNumber(row.shareholders)}</td>
                       <td className="p-4">
                         <Badge
@@ -390,7 +433,6 @@ const tableRows = data
                         <DetailMetric label="Net Assets (PL)" value={formatCurrency(d.net_assets)} variant="green" />
                         <DetailMetric label="Receivables" value={formatCurrency(d.portfolio)} variant="green" />
                         <DetailMetric label="Cash" value={formatCurrency(d.cash)} variant="green" />
-                        <DetailMetric label="Cash Drag" value={formatPercent(d.net_assets > 0 ? (d.cash / d.net_assets) * 100 : 0)} variant={d.net_assets > 0 && (d.cash / d.net_assets) * 100 > 15 ? "orange" : "green"} />
                         <DetailMetric label="Liabilities" value={formatCurrency(d.liabilities)} variant="orange" />
                         <DetailMetric label="Overdue" value={formatCurrency(d.overdue)} variant="orange" />
                         <DetailMetric label="Shareholders" value={formatNumber(d.shareholders)} variant="blue" />
