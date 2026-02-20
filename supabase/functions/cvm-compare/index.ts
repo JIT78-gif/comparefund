@@ -9,7 +9,7 @@ const CNPJS: Record<string, string[]> = {
 };
 
 // CNPJs known to be NP but whose CVM fund name is truncated and misses "Não Padronizado"
-const NP_OVERRIDE: Set<string> = new Set(["40211675000102"]);
+const NP_OVERRIDE: Set<string> = new Set(["40211675000102", "11489344000122"]);
 
 function cleanCnpj(raw: string): string {
   return raw.replace(/[.\-\/]/g, "");
