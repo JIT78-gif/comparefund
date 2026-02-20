@@ -1,49 +1,70 @@
 
 
-## Fix: Liabilities, Unit Variation, and NP Fund Type
+## Add Atena Tecnologia and Cifra S.A. Credit to the Comparison
 
-### Issues Found (from edge function logs)
+### Overview
+Currently the page compares only Multiplica vs Red. We'll expand it to compare all 4 companies: Multiplica, Red, Atena Tecnologia, and Cifra S.A. Credit. Since we don't know the CNPJs for Atena and Cifra, we'll first add a CNPJ discovery mechanism that searches CVM data by fund name.
 
-1. **Liabilities always R$ 0.00** -- The code declares `fundLiabilities` map but never populates it. Tab III (passivos/liabilities) is not in the `targetTables` array, so it's never parsed.
+### Step 1: Create a Discovery Edge Function
 
-2. **Unit Variation always 0%** -- The `unit_value` field is never assigned anywhere. Tab IV contains a quota/unit value field that needs to be extracted.
+Create a new edge function `cvm-discover` that:
+- Downloads the CVM ZIP for a given month (e.g., 202501)
+- Parses tab_I to extract all fund names (DENOM_SOCIAL) and their CNPJs
+- Filters by search terms like "ATENA" and "CIFRA"
+- Returns matching fund names and CNPJs so we can identify the correct Standard and NP funds
 
-3. **Fund type always STANDARD** -- The column `TP_FUNDO` in tab_I may not exist or contain the expected values. Also, the `fundType` parameter received from the frontend is never used to filter results.
+This is a one-time utility to find the CNPJs. We'll call it, read the logs, and then hardcode the discovered CNPJs.
 
----
+### Step 2: Update Edge Function with New Companies
 
-### Changes
+Once we have the CNPJs, update `cvm-compare/index.ts`:
+- Add `atena` and `cifra` entries to the `CNPJS` map with their Standard and NP fund CNPJs
+- Add any NP override entries if needed
+- Update the `fundCounts` initialization to include `atena` and `cifra`
+- Update the `results` aggregation to include all 4 companies
+- Change the response structure from `{ multiplica, red, details }` to a dynamic company map
 
-#### Edge Function (`supabase/functions/cvm-compare/index.ts`)
+### Step 3: Update Frontend to Support 4 Companies
 
-**Add tab_III to parsed tables:**
-- Add `"tab_III"` to the `targetTables` array
-- Parse tab_III CSV looking for the liabilities column (e.g., `TAB_III_A_VL_PASSIVO` or similar passivo field)
-- Populate `fundLiabilities[cnpj]` and `results[company].liabilities`
+Update `src/pages/Compare.tsx`:
+- Change the `CompareResponse` interface to use a dynamic map of companies instead of only `multiplica` and `red`
+- Define a company config array with names, colors, and display labels for all 4 companies
+- Update metric cards to show a scrollable grid for all 4 companies (PL + Delinquency for each)
+- Update bar charts to show 4 bars per chart instead of 2
+- Update the data table to show 4 rows
+- Update the fund details section to handle all companies
+- Update the page title from "Multiplica vs Red" to something like "FIDC Comparison"
 
-**Extract unit value from tab_IV:**
-- Look for `TAB_IV_VL_QUOTA` or `TAB_IV_A_VL_COTA` column in tab_IV rows
-- For each company, compute unit variation as percentage change (requires fetching previous month data, or using the quota variation field if available)
-- Alternatively, look for a quota variation column directly in the data
+### Technical Details
 
-**Fix fund type detection:**
-- Log tab_I headers to identify the correct column for NP vs STANDARD classification (likely `CLASSE_SERIE` or `CONDOM` rather than `TP_FUNDO`)
-- Common NP indicators: fund name contains "NAO PADRONIZADO" or "NP", or a specific CVM classification field
-- As a reliable fallback, check if the fund name (DENOM_SOCIAL) contains "NAO PADRONIZADO" or "NP"
+**Discovery function** (`supabase/functions/cvm-discover/index.ts`):
+- POST with `{ refMonth, searchTerms: ["ATENA", "CIFRA"] }`
+- Returns `{ matches: [{ cnpj, name, fund_type_detected }] }`
 
-**Use fundType parameter for filtering:**
-- After building the details array, filter results to only include funds matching the requested `fundType` (STANDARD or NP)
-- Recalculate aggregated metrics after filtering
+**Edge function changes** (`supabase/functions/cvm-compare/index.ts`):
+- CNPJS map: add `atena: [standardCnpj, npCnpj]` and `cifra: [standardCnpj, npCnpj]`
+- Results initialization: add `atena` and `cifra` keys
+- Response: `{ multiplica: {...}, red: {...}, atena: {...}, cifra: {...}, details: [...] }`
 
-#### Frontend (`src/pages/Compare.tsx`)
+**Frontend changes** (`src/pages/Compare.tsx`):
+- Company config:
+```text
+COMPANIES = [
+  { key: "multiplica", label: "Multiplica", color: "bg-primary", chartColor: "hsl(160,100%,45%)" },
+  { key: "red",        label: "Red",        color: "bg-accent",  chartColor: "hsl(20,100%,57%)" },
+  { key: "atena",      label: "Atena",      color: "bg-secondary", chartColor: "hsl(221,100%,65%)" },
+  { key: "cifra",      label: "Cifra",      color: "bg-yellow-500", chartColor: "hsl(45,100%,50%)" },
+]
+```
+- CompareResponse becomes `Record<string, CompanyData> & { details: FundDetail[] }`
+- Metric cards grid: 4 columns for PL, then 4 for delinquency (or 2 rows of 4)
+- Charts: 4 bars per chart
+- Table: 4 rows dynamically generated from company config
 
-- No changes needed -- the frontend already renders liabilities, unit variation chart, and fund type badges correctly. The issue is purely backend data.
-
-### Technical Sequence
-
-1. Add `tab_III` parsing for liabilities
-2. Add unit value / quota extraction from tab_IV
-3. Fix fund type detection using fund name as fallback
-4. Apply `fundType` filter before returning results
-5. Deploy and test with both Standard and NP toggles
+### Sequence
+1. Deploy `cvm-discover` and call it to find Atena/Cifra CNPJs
+2. Read logs to get the CNPJs
+3. Update `cvm-compare` with the new company CNPJs
+4. Update the frontend to render all 4 companies
+5. Deploy and test
 
