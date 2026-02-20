@@ -4,6 +4,8 @@ import JSZip from "npm:jszip@3.10.1";
 const CNPJS: Record<string, string[]> = {
   multiplica: ["23216398000101", "40211675000102"],
   red: ["17250006000110", "11489344000122"],
+  atena: ["31904898000156"],
+  cifra: ["08818152000108"],
 };
 
 // CNPJs known to be NP but whose CVM fund name is truncated and misses "Não Padronizado"
@@ -93,7 +95,7 @@ Deno.serve(async (req) => {
     const fundPortfolio: Record<string, number> = {};
     const fundOverdue: Record<string, number> = {};
     const fundUnitValues: Record<string, number> = {};
-    const fundCounts: Record<string, number> = { multiplica: 0, red: 0 };
+    const fundCounts: Record<string, number> = { multiplica: 0, red: 0, atena: 0, cifra: 0 };
 
     // Include tab_III for liabilities
     const targetTables = ["tab_I", "tab_II", "tab_III", "tab_IV", "tab_VII"];
@@ -251,10 +253,10 @@ Deno.serve(async (req) => {
       net_assets: number; portfolio: number; overdue: number;
       delinquency: number; unit_value: number; fund_count: number;
       liabilities: number; fund_type: string;
-    }> = {
-      multiplica: { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD" },
-      red: { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD" },
-    };
+    }> = {};
+    for (const company of Object.keys(CNPJS)) {
+      results[company] = { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD" };
+    }
 
     for (const d of details) {
       const r = results[d.company];

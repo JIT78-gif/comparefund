@@ -31,11 +31,14 @@ interface FundDetail {
   fund_type: string;
 }
 
-interface CompareResponse {
-  multiplica: CompanyData;
-  red: CompanyData;
-  details: FundDetail[];
-}
+type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
+
+const COMPANIES = [
+  { key: "multiplica", label: "Multiplica", color: "bg-primary", chartColor: "hsl(160, 100%, 45%)" },
+  { key: "red", label: "Red", color: "bg-accent", chartColor: "hsl(20, 100%, 57%)" },
+  { key: "atena", label: "Atena", color: "bg-secondary", chartColor: "hsl(221, 100%, 65%)" },
+  { key: "cifra", label: "Cifra", color: "bg-yellow-500", chartColor: "hsl(45, 100%, 50%)" },
+];
 
 const Compare = () => {
   const [year, setYear] = useState(2024);
@@ -81,17 +84,17 @@ const Compare = () => {
   const years = Array.from({ length: 17 }, (_, i) => 2010 + i);
 
   const chartData = data
-    ? [
-        { name: "Multiplica", assets: data.multiplica.net_assets, delinquency: data.multiplica.delinquency, unitVar: data.multiplica.unit_value },
-        { name: "Red", assets: data.red.net_assets, delinquency: data.red.delinquency, unitVar: data.red.unit_value },
-      ]
+    ? COMPANIES.map((c) => {
+        const d = (data as Record<string, CompanyData>)[c.key];
+        return d ? { name: c.label, assets: d.net_assets, delinquency: d.delinquency, unitVar: d.unit_value } : null;
+      }).filter(Boolean)
     : [];
 
   const tableRows = data
-    ? [
-        { name: "Multiplica", color: "bg-primary", ...data.multiplica },
-        { name: "Red", color: "bg-accent", ...data.red },
-      ]
+    ? COMPANIES.map((c) => {
+        const d = (data as Record<string, CompanyData>)[c.key];
+        return d ? { name: c.label, color: c.color, ...d } : null;
+      }).filter(Boolean) as ({ name: string; color: string } & CompanyData)[]
     : [];
 
   const tooltipStyle = {
@@ -103,14 +106,14 @@ const Compare = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-24 px-6 md:px-[60px] max-w-[1200px] mx-auto pb-20">
+      <div className="pt-24 px-6 md:px-[60px] max-w-[1400px] mx-auto pb-20">
         {/* Header */}
         <div className="mb-10">
           <span className="inline-block border border-primary/30 text-primary text-[10px] tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
             Live CVM
           </span>
           <h1 className="font-display font-extrabold text-4xl md:text-6xl tracking-tight leading-[0.95] mb-4">
-            Multiplica vs Red
+            FIDC Comparison
           </h1>
           <p className="font-serif font-light text-muted-foreground text-lg max-w-xl leading-relaxed">
             Real-time FIDC comparison using official CVM data.
@@ -185,35 +188,37 @@ const Compare = () => {
         {data && (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <MetricCard
-                icon={<div className="w-5 h-5 rounded-full bg-primary glow-green" />}
-                label="Multiplica PL"
-                value={formatCurrency(data.multiplica.net_assets)}
-                subtitle={`Portfolio: ${formatCurrency(data.multiplica.portfolio)}`}
-                color="green"
-              />
-              <MetricCard
-                icon={<div className="w-5 h-5 rounded-full bg-accent glow-orange" />}
-                label="Red PL"
-                value={formatCurrency(data.red.net_assets)}
-                subtitle={`Portfolio: ${formatCurrency(data.red.portfolio)}`}
-                color="orange"
-              />
-              <MetricCard
-                icon={<span className="text-xl">📊</span>}
-                label="Multiplica Delinq."
-                value={formatPercent(data.multiplica.delinquency)}
-                subtitle="Overdue / Portfolio"
-                color="green"
-              />
-              <MetricCard
-                icon={<span className="text-xl">📊</span>}
-                label="Red Delinq."
-                value={formatPercent(data.red.delinquency)}
-                subtitle="Overdue / Portfolio"
-                color="orange"
-              />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              {COMPANIES.map((c) => {
+                const d = (data as Record<string, CompanyData>)[c.key];
+                if (!d) return null;
+                return (
+                  <MetricCard
+                    key={`${c.key}-pl`}
+                    icon={<div className={`w-5 h-5 rounded-full ${c.color}`} />}
+                    label={`${c.label} PL`}
+                    value={formatCurrency(d.net_assets)}
+                    subtitle={`Portfolio: ${formatCurrency(d.portfolio)}`}
+                    color="green"
+                  />
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              {COMPANIES.map((c) => {
+                const d = (data as Record<string, CompanyData>)[c.key];
+                if (!d) return null;
+                return (
+                  <MetricCard
+                    key={`${c.key}-delinq`}
+                    icon={<span className="text-xl">📊</span>}
+                    label={`${c.label} Delinq.`}
+                    value={formatPercent(d.delinquency)}
+                    subtitle="Overdue / Portfolio"
+                    color="orange"
+                  />
+                );
+              })}
             </div>
 
             {/* Charts — 3 columns */}
@@ -224,7 +229,9 @@ const Compare = () => {
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
-                  <Bar dataKey="assets" fill="hsl(160, 100%, 45%)" radius={[3, 3, 0, 0]} />
+                  {COMPANIES.map((c) => (
+                    <Bar key={c.key} dataKey="assets" fill={c.chartColor} radius={[3, 3, 0, 0]} name={c.label} />
+                  ))}
                 </BarChart>
               </ChartCard>
 
