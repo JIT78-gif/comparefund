@@ -243,7 +243,11 @@ const Compare = () => {
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Delinquency"]} />
-                  <Bar dataKey="delinquency" fill="hsl(20, 100%, 57%)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartCard>
 
@@ -253,7 +257,11 @@ const Compare = () => {
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Unit Var"]} />
-                  <Bar dataKey="unitVar" fill="hsl(221, 100%, 65%)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartCard>
             </div>
@@ -365,7 +373,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5">
         {title}
       </h3>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={280}>
         {children as React.ReactElement}
       </ResponsiveContainer>
     </div>
