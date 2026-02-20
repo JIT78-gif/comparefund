@@ -8,7 +8,6 @@ const CNPJS: Record<string, string[]> = {
   cifra: ["08818152000108"],
 };
 
-// CNPJs known to be NP but whose CVM fund name is truncated and misses "Não Padronizado"
 const NP_OVERRIDE: Set<string> = new Set(["40211675000102"]);
 
 function cleanCnpj(raw: string): string {
@@ -52,6 +51,8 @@ interface FundDetail {
   liabilities: number;
   overdue: number;
   fund_type: string;
+  cash: number;
+  shareholders: number;
 }
 
 Deno.serve(async (req) => {
@@ -95,10 +96,11 @@ Deno.serve(async (req) => {
     const fundPortfolio: Record<string, number> = {};
     const fundOverdue: Record<string, number> = {};
     const fundUnitValues: Record<string, number> = {};
+    const fundCash: Record<string, number> = {};
+    const fundShareholders: Record<string, number> = {};
     const fundCounts: Record<string, number> = { multiplica: 0, red: 0, atena: 0, cifra: 0 };
 
-    // Include tab_III for liabilities
-    const targetTables = ["tab_I", "tab_II", "tab_III", "tab_IV", "tab_VII"];
+    const targetTables = ["tab_I", "tab_II", "tab_III", "tab_IV", "tab_V", "tab_VI", "tab_VII"];
 
     for (const [filename, file] of Object.entries(zip.files)) {
       if (file.dir || !filename.endsWith(".csv")) continue;
@@ -113,16 +115,17 @@ Deno.serve(async (req) => {
       const cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
       if (cnpjIdx === -1) continue;
 
-      // Determine which table this is
+      // Determine which table
       const isTabI = (filename.includes("tab_I_") || filename.endsWith("tab_I.csv")) &&
-                     !filename.includes("tab_II") && !filename.includes("tab_IV") && !filename.includes("tab_VII") && !filename.includes("tab_III");
+                     !filename.includes("tab_II") && !filename.includes("tab_IV") && !filename.includes("tab_VII") && !filename.includes("tab_III") && !filename.includes("tab_V") && !filename.includes("tab_VI");
       const isTabII = filename.includes("tab_II") && !filename.includes("tab_III");
       const isTabIII = filename.includes("tab_III");
       const isTabIV = filename.includes("tab_IV");
+      const isTabV = filename.includes("tab_V") && !filename.includes("tab_VI") && !filename.includes("tab_VII");
+      const isTabVI = filename.includes("tab_VI") && !filename.includes("tab_VII");
       const isTabVII = filename.includes("tab_VII");
 
       if (isTabI) {
-        // Tab I: fund identification - name, type, period
         console.log(`tab_I headers: ${header.join(", ")}`);
         const nameIdx = header.indexOf("DENOM_SOCIAL");
         const dtCompetIdx = header.indexOf("DT_COMPTC");
@@ -135,7 +138,6 @@ Deno.serve(async (req) => {
           if (nameIdx !== -1) fundNames[cnpj] = row[nameIdx] || "";
           if (dtCompetIdx !== -1) fundPeriods[cnpj] = row[dtCompetIdx] || "";
 
-          // Fund type detection: check TP_FUNDO, CONDOM, and fund name
           let detectedType = NP_OVERRIDE.has(cnpj) ? "NP" : "STANDARD";
           if (tpFundoIdx !== -1) {
             const tp = (row[tpFundoIdx] || "").toUpperCase();
@@ -149,37 +151,26 @@ Deno.serve(async (req) => {
               detectedType = "NP";
             }
           }
-          // Fallback: check fund name for NP indicators
           const name = (fundNames[cnpj] || "").toUpperCase();
           if (name.includes("NAO PADRONIZADO") || name.includes("NÃO PADRONIZADO") || name.includes(" NP ") || name.endsWith(" NP")) {
             detectedType = "NP";
           }
           fundTypes[cnpj] = detectedType;
-          const rawTp = tpFundoIdx !== -1 ? (row[tpFundoIdx] || "") : "N/A";
-          const rawCondom = condominioIdx !== -1 ? (row[condominioIdx] || "") : "N/A";
-          console.log(`Fund ${cnpj} type=${detectedType}, tp_fundo_classe=${rawTp}, condom=${rawCondom}, name=${fundNames[cnpj]?.substring(0, 50)}`);
         }
       } else if (isTabIII) {
-        // Tab III: liabilities (passivos)
         console.log(`tab_III headers: ${header.join(", ")}`);
-        // Try common liability column names
         const passivoIdx = header.findIndex(h =>
           h.includes("VL_PASSIVO") || h.includes("VL_PATRIM_LIQ") || h.includes("PASSIVO")
         );
         if (passivoIdx !== -1) {
-          console.log(`tab_III using liability column: ${header[passivoIdx]}`);
           for (const row of rows) {
             const cnpj = cleanCnpj(row[cnpjIdx] || "");
             const company = getCompany(cnpj);
             if (!company) continue;
-            const liability = parseNum(row[passivoIdx]);
-            fundLiabilities[cnpj] = (fundLiabilities[cnpj] || 0) + liability;
+            fundLiabilities[cnpj] = (fundLiabilities[cnpj] || 0) + parseNum(row[passivoIdx]);
           }
-        } else {
-          console.log("tab_III: no liability column found");
         }
       } else if (isTabIV) {
-        console.log(`tab_IV headers: ${header.join(", ")}`);
         const plIdx = header.indexOf("TAB_IV_A_VL_PL");
         const plMedioIdx = header.indexOf("TAB_IV_B_VL_PL_MEDIO");
         const nameIdx = header.indexOf("DENOM_SOCIAL");
@@ -193,7 +184,6 @@ Deno.serve(async (req) => {
           fundNetAssets[cnpj] = Math.max(fundNetAssets[cnpj] || 0, pl);
           if (nameIdx !== -1 && !fundNames[cnpj]) fundNames[cnpj] = row[nameIdx] || "";
           if (dtIdx !== -1 && !fundPeriods[cnpj]) fundPeriods[cnpj] = row[dtIdx] || "";
-          // Compute unit variation as (PL - PL_MEDIO) / PL_MEDIO * 100
           if (plMedio > 0 && pl > 0) {
             fundUnitValues[cnpj] = ((pl - plMedio) / plMedio) * 100;
           }
@@ -205,8 +195,42 @@ Deno.serve(async (req) => {
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
           const company = getCompany(cnpj);
           if (!company) continue;
-          const cart = parseNum(row[cartIdx]);
-          fundPortfolio[cnpj] = Math.max(fundPortfolio[cnpj] || 0, cart);
+          fundPortfolio[cnpj] = Math.max(fundPortfolio[cnpj] || 0, parseNum(row[cartIdx]));
+        }
+      } else if (isTabV) {
+        console.log(`tab_V headers: ${header.join(", ")}`);
+        // Cash / disponibilidades
+        const cashIdx = header.findIndex(h =>
+          h.includes("DISPONIB") || h.includes("VL_DISPONIB") || h.includes("TAB_V_A_VL_DISPONIB")
+        );
+        if (cashIdx !== -1) {
+          console.log(`tab_V using cash column: ${header[cashIdx]}`);
+          for (const row of rows) {
+            const cnpj = cleanCnpj(row[cnpjIdx] || "");
+            const company = getCompany(cnpj);
+            if (!company) continue;
+            fundCash[cnpj] = (fundCash[cnpj] || 0) + parseNum(row[cashIdx]);
+          }
+        } else {
+          console.log("tab_V: no cash column found among headers");
+        }
+      } else if (isTabVI) {
+        console.log(`tab_VI headers: ${header.join(", ")}`);
+        // Number of shareholders (cotistas)
+        const cotistasIdx = header.findIndex(h =>
+          h.includes("QT_COTST") || h.includes("COTISTA") || h.includes("QT_COTISTA")
+        );
+        if (cotistasIdx !== -1) {
+          console.log(`tab_VI using shareholders column: ${header[cotistasIdx]}`);
+          for (const row of rows) {
+            const cnpj = cleanCnpj(row[cnpjIdx] || "");
+            const company = getCompany(cnpj);
+            if (!company) continue;
+            const val = parseNum(row[cotistasIdx]);
+            fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
+          }
+        } else {
+          console.log("tab_VI: no shareholders column found among headers");
         }
       } else if (isTabVII) {
         const overdueAdIdx = header.indexOf("TAB_VII_A3_2_VL_DIRCRED_VENC_AD");
@@ -222,12 +246,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build details array from collected per-fund data
+    // Build details
     let details: FundDetail[] = [];
     for (const [company, cnpjs] of Object.entries(CNPJS)) {
       for (const cnpj of cnpjs) {
         if (fundNetAssets[cnpj] || fundPortfolio[cnpj]) {
-          const ft = fundTypes[cnpj] || "STANDARD";
           details.push({
             company,
             fund_name: fundNames[cnpj] || `Fund ${cnpj}`,
@@ -237,25 +260,26 @@ Deno.serve(async (req) => {
             portfolio: fundPortfolio[cnpj] || 0,
             liabilities: fundLiabilities[cnpj] || 0,
             overdue: fundOverdue[cnpj] || 0,
-            fund_type: ft,
+            fund_type: fundTypes[cnpj] || "STANDARD",
+            cash: fundCash[cnpj] || 0,
+            shareholders: fundShareholders[cnpj] || 0,
           });
         }
       }
     }
 
-    // Apply fundType filter if provided
     if (fundType && (fundType === "STANDARD" || fundType === "NP")) {
       details = details.filter((d) => d.fund_type === fundType);
     }
 
-    // Build aggregated results from filtered details
+    // Aggregated results
     const results: Record<string, {
       net_assets: number; portfolio: number; overdue: number;
       delinquency: number; unit_value: number; fund_count: number;
-      liabilities: number; fund_type: string;
+      liabilities: number; fund_type: string; cash: number; shareholders: number;
     }> = {};
     for (const company of Object.keys(CNPJS)) {
-      results[company] = { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD" };
+      results[company] = { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD", cash: 0, shareholders: 0 };
     }
 
     for (const d of details) {
@@ -264,22 +288,20 @@ Deno.serve(async (req) => {
       r.portfolio += d.portfolio;
       r.overdue += d.overdue;
       r.liabilities += d.liabilities;
+      r.cash += d.cash;
+      r.shareholders += d.shareholders;
       r.fund_count++;
       r.fund_type = d.fund_type;
-      // Use the latest unit value for each company
       if (fundUnitValues[d.cnpj]) {
         r.unit_value = fundUnitValues[d.cnpj];
       }
     }
 
-    // Compute delinquency
     for (const key of Object.keys(results)) {
       const r = results[key];
       if (r.portfolio === 0 && r.net_assets > 0) r.portfolio = r.net_assets * 0.85;
       r.delinquency = r.portfolio > 0 ? (r.overdue / r.portfolio) * 100 : 0;
     }
-
-    console.log("Results:", JSON.stringify(results));
 
     return new Response(JSON.stringify({ ...results, details }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

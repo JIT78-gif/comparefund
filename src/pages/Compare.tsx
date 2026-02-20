@@ -6,7 +6,7 @@ import {
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatPercent, MONTHS } from "@/lib/format";
+import { formatCurrency, formatPercent, formatNumber, MONTHS } from "@/lib/format";
 
 interface CompanyData {
   net_assets: number;
@@ -17,6 +17,8 @@ interface CompanyData {
   fund_count: number;
   liabilities: number;
   fund_type: string;
+  cash: number;
+  shareholders: number;
 }
 
 interface FundDetail {
@@ -29,6 +31,8 @@ interface FundDetail {
   liabilities: number;
   overdue: number;
   fund_type: string;
+  cash: number;
+  shareholders: number;
 }
 
 type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
@@ -86,7 +90,15 @@ const Compare = () => {
   const chartData = data
     ? COMPANIES.map((c) => {
         const d = (data as Record<string, CompanyData>)[c.key];
-        return d ? { name: c.label, assets: d.net_assets, delinquency: d.delinquency, unitVar: d.unit_value } : null;
+        return d ? {
+          name: c.label,
+          assets: d.net_assets,
+          delinquency: d.delinquency,
+          unitVar: d.unit_value,
+          receivables: d.portfolio,
+          cash: d.cash,
+          shareholders: d.shareholders,
+        } : null;
       }).filter(Boolean)
     : [];
 
@@ -103,6 +115,8 @@ const Compare = () => {
     borderRadius: 4,
     color: "hsl(225 30% 93%)",
   };
+  const labelStyle = { color: "hsl(225 30% 93%)" };
+  const itemStyle = { color: "hsl(225 30% 93%)" };
 
   return (
     <div className="min-h-screen bg-background">
@@ -188,7 +202,7 @@ const Compare = () => {
 
         {data && (
           <>
-            {/* Metric Cards */}
+            {/* Metric Cards — Row 1: Net Assets */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
@@ -199,13 +213,14 @@ const Compare = () => {
                     icon={<div className={`w-5 h-5 rounded-full ${c.color}`} />}
                     label={`${c.label} PL`}
                     value={formatCurrency(d.net_assets)}
-                    subtitle={`Portfolio: ${formatCurrency(d.portfolio)}`}
+                    subtitle={`Receivables: ${formatCurrency(d.portfolio)}`}
                     color="green"
                   />
                 );
               })}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            {/* Metric Cards — Row 2: Delinquency */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
                 if (!d) return null;
@@ -221,15 +236,32 @@ const Compare = () => {
                 );
               })}
             </div>
+            {/* Metric Cards — Row 3: Cash & Shareholders */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              {COMPANIES.map((c) => {
+                const d = (data as Record<string, CompanyData>)[c.key];
+                if (!d) return null;
+                return (
+                  <MetricCard
+                    key={`${c.key}-cash`}
+                    icon={<span className="text-xl">💰</span>}
+                    label={`${c.label} Cash`}
+                    value={formatCurrency(d.cash)}
+                    subtitle={`${formatNumber(d.shareholders)} shareholders`}
+                    color="blue"
+                  />
+                );
+              })}
+            </div>
 
-            {/* Charts — 3 columns */}
+            {/* Charts — 3x2 grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-              <ChartCard title="Total Assets (R$)">
+              <ChartCard title="Patrimônio Líquido (R$)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "PL"]} />
                   <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
@@ -238,12 +270,12 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Delinquency Rate (%)">
+              <ChartCard title="Inadimplência (%)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Delinquency"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Inadimplência"]} />
                   <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
@@ -252,13 +284,55 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Unit Variation (%)">
+              <ChartCard title="Valor da Cota (%)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Unit Var"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Cota"]} />
                   <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Direitos Creditórios (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Recebíveis"]} />
+                  <Bar dataKey="receivables" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Caixa / Disponibilidades (R$)">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Caixa"]} />
+                  <Bar dataKey="cash" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
+
+              <ChartCard title="Quantidade de Cotistas">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatNumber(value), "Cotistas"]} />
+                  <Bar dataKey="shareholders" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
                     ))}
@@ -268,12 +342,12 @@ const Compare = () => {
             </div>
 
             {/* Data Table */}
-            <div className="border border-border rounded-sm overflow-hidden mb-8">
+            <div className="border border-border rounded-sm overflow-x-auto mb-8">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/40">
-                    {["Company", "Assets", "# Funds", "Delinquency %", "Unit Var %", "Type"].map((h) => (
-                      <th key={h} className="text-left p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display">
+                    {["Company", "PL", "Receivables", "Cash", "Shareholders", "Delinq. %", "Unit Var %", "Subordinação", "Type"].map((h) => (
+                      <th key={h} className="text-left p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -288,8 +362,10 @@ const Compare = () => {
                           <span className="font-display font-semibold text-foreground">{row.name}</span>
                         </div>
                       </td>
-                      <td className="p-4 text-muted-foreground font-mono">{formatCurrency(row.net_assets)}</td>
-                      <td className="p-4 text-muted-foreground font-mono">{row.fund_count || 1}</td>
+                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
+                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.portfolio)}</td>
+                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.cash)}</td>
+                      <td className="p-4 text-muted-foreground font-mono">{formatNumber(row.shareholders)}</td>
                       <td className="p-4">
                         <Badge
                           variant="outline"
@@ -303,6 +379,9 @@ const Compare = () => {
                         </Badge>
                       </td>
                       <td className="p-4 text-muted-foreground font-mono">{formatPercent(row.unit_value)}</td>
+                      <td className="p-4">
+                        <span className="text-muted-foreground/50 text-xs italic" title="Available in fund regulation documents only">N/A</span>
+                      </td>
                       <td className="p-4">
                         <Badge
                           variant="outline"
@@ -350,11 +429,13 @@ const Compare = () => {
                           {d.fund_type}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <DetailMetric label="Net Assets (PL)" value={formatCurrency(d.net_assets)} variant="green" />
-                        <DetailMetric label="Portfolio" value={formatCurrency(d.portfolio)} variant="green" />
+                        <DetailMetric label="Receivables" value={formatCurrency(d.portfolio)} variant="green" />
+                        <DetailMetric label="Cash" value={formatCurrency(d.cash)} variant="green" />
                         <DetailMetric label="Liabilities" value={formatCurrency(d.liabilities)} variant="orange" />
                         <DetailMetric label="Overdue" value={formatCurrency(d.overdue)} variant="orange" />
+                        <DetailMetric label="Shareholders" value={formatNumber(d.shareholders)} variant="blue" />
                       </div>
                     </div>
                   ))}
@@ -381,11 +462,12 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-function DetailMetric({ label, value, variant }: { label: string; value: string; variant: "green" | "orange" }) {
+function DetailMetric({ label, value, variant }: { label: string; value: string; variant: "green" | "orange" | "blue" }) {
+  const colorMap = { green: "text-primary", orange: "text-accent", blue: "text-secondary" };
   return (
     <div>
       <p className="text-[9px] tracking-[1px] uppercase text-muted-foreground mb-1">{label}</p>
-      <p className={`font-mono text-sm font-semibold ${variant === "green" ? "text-primary" : "text-accent"}`}>
+      <p className={`font-mono text-sm font-semibold ${colorMap[variant]}`}>
         {value}
       </p>
     </div>
