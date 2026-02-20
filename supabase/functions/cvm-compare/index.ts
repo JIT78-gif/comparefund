@@ -131,12 +131,21 @@ Deno.serve(async (req) => {
         const dtCompetIdx = header.indexOf("DT_COMPTC");
         const tpFundoIdx = header.indexOf("TP_FUNDO") !== -1 ? header.indexOf("TP_FUNDO") : header.indexOf("TP_FUNDO_CLASSE");
         const condominioIdx = header.indexOf("CONDOM");
+        // Cash (disponibilidades) is in Tab I as TAB_I1_VL_DISP
+        const dispIdx = header.indexOf("TAB_I1_VL_DISP");
+        if (dispIdx !== -1) console.log(`tab_I: found cash column TAB_I1_VL_DISP at index ${dispIdx}`);
         for (const row of rows) {
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
           const company = getCompany(cnpj);
           if (!company) continue;
           if (nameIdx !== -1) fundNames[cnpj] = row[nameIdx] || "";
           if (dtCompetIdx !== -1) fundPeriods[cnpj] = row[dtCompetIdx] || "";
+
+          // Extract cash from Tab I
+          if (dispIdx !== -1) {
+            const cashVal = parseNum(row[dispIdx]);
+            fundCash[cnpj] = (fundCash[cnpj] || 0) + cashVal;
+          }
 
           let detectedType = NP_OVERRIDE.has(cnpj) ? "NP" : "STANDARD";
           if (tpFundoIdx !== -1) {
@@ -171,10 +180,17 @@ Deno.serve(async (req) => {
           }
         }
       } else if (isTabIV) {
+        console.log(`tab_IV headers: ${header.join(", ")}`);
         const plIdx = header.indexOf("TAB_IV_A_VL_PL");
         const plMedioIdx = header.indexOf("TAB_IV_B_VL_PL_MEDIO");
         const nameIdx = header.indexOf("DENOM_SOCIAL");
         const dtIdx = header.indexOf("DT_COMPTC");
+        // Shareholders (cotistas) - search for NR_COTST or QT_COTST
+        const cotistasIdx = header.findIndex(h =>
+          h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("NR_COTISTA") || h.includes("COTST")
+        );
+        if (cotistasIdx !== -1) console.log(`tab_IV: found shareholders column ${header[cotistasIdx]} at index ${cotistasIdx}`);
+        else console.log(`tab_IV: no shareholders column found`);
         for (const row of rows) {
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
           const company = getCompany(cnpj);
@@ -187,6 +203,11 @@ Deno.serve(async (req) => {
           if (plMedio > 0 && pl > 0) {
             fundUnitValues[cnpj] = ((pl - plMedio) / plMedio) * 100;
           }
+          // Extract shareholders count
+          if (cotistasIdx !== -1) {
+            const val = parseNum(row[cotistasIdx]);
+            fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
+          }
           fundCounts[company]++;
         }
       } else if (isTabII) {
@@ -198,40 +219,11 @@ Deno.serve(async (req) => {
           fundPortfolio[cnpj] = Math.max(fundPortfolio[cnpj] || 0, parseNum(row[cartIdx]));
         }
       } else if (isTabV) {
-        console.log(`tab_V headers: ${header.join(", ")}`);
-        // Cash / disponibilidades
-        const cashIdx = header.findIndex(h =>
-          h.includes("DISPONIB") || h.includes("VL_DISPONIB") || h.includes("TAB_V_A_VL_DISPONIB")
-        );
-        if (cashIdx !== -1) {
-          console.log(`tab_V using cash column: ${header[cashIdx]}`);
-          for (const row of rows) {
-            const cnpj = cleanCnpj(row[cnpjIdx] || "");
-            const company = getCompany(cnpj);
-            if (!company) continue;
-            fundCash[cnpj] = (fundCash[cnpj] || 0) + parseNum(row[cashIdx]);
-          }
-        } else {
-          console.log("tab_V: no cash column found among headers");
-        }
+        // Tab V contains receivables aging data, not cash. Cash is in Tab I.
+        console.log(`tab_V: skipping (receivables aging data)`);
       } else if (isTabVI) {
-        console.log(`tab_VI headers: ${header.join(", ")}`);
-        // Number of shareholders (cotistas)
-        const cotistasIdx = header.findIndex(h =>
-          h.includes("QT_COTST") || h.includes("COTISTA") || h.includes("QT_COTISTA")
-        );
-        if (cotistasIdx !== -1) {
-          console.log(`tab_VI using shareholders column: ${header[cotistasIdx]}`);
-          for (const row of rows) {
-            const cnpj = cleanCnpj(row[cnpjIdx] || "");
-            const company = getCompany(cnpj);
-            if (!company) continue;
-            const val = parseNum(row[cotistasIdx]);
-            fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
-          }
-        } else {
-          console.log("tab_VI: no shareholders column found among headers");
-        }
+        // Tab VI contains receivables aging data, not shareholders. Shareholders searched in Tab IV.
+        console.log(`tab_VI: skipping (receivables aging data)`);
       } else if (isTabVII) {
         const overdueAdIdx = header.indexOf("TAB_VII_A3_2_VL_DIRCRED_VENC_AD");
         const overdueInadIdx = header.indexOf("TAB_VII_A4_2_VL_DIRCRED_VENC_INAD");
@@ -244,6 +236,70 @@ Deno.serve(async (req) => {
           fundOverdue[cnpj] = (fundOverdue[cnpj] || 0) + ov;
         }
       }
+    }
+
+    // Fetch shareholders from CVM medidas dataset (separate from monthly report)
+    try {
+      const medidasUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/medidas_mes_fie_${refMonth}.csv`;
+      console.log(`Fetching medidas: ${medidasUrl}`);
+      const medidasRes = await fetch(medidasUrl);
+      if (medidasRes.ok) {
+        const medidasText = await medidasRes.text();
+        const medidasLines = medidasText.split("\n").filter(l => l.trim());
+        if (medidasLines.length > 1) {
+          const mHeader = medidasLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
+          console.log(`medidas headers: ${mHeader.join(", ")}`);
+          const mCnpjIdx = mHeader.findIndex(h => h.includes("CNPJ"));
+          const mCotistasIdx = mHeader.findIndex(h => h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("COTST"));
+          console.log(`medidas: CNPJ idx=${mCnpjIdx}, cotistas idx=${mCotistasIdx} (${mCotistasIdx >= 0 ? mHeader[mCotistasIdx] : 'not found'})`);
+          if (mCnpjIdx !== -1 && mCotistasIdx !== -1) {
+            for (let i = 1; i < medidasLines.length; i++) {
+              const cols = medidasLines[i].split(";").map(c => c.trim().replace(/"/g, ""));
+              const cnpj = cleanCnpj(cols[mCnpjIdx] || "");
+              const company = getCompany(cnpj);
+              if (!company) continue;
+              const val = parseNum(cols[mCotistasIdx]);
+              fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
+              console.log(`medidas: ${company} CNPJ ${cnpj} shareholders=${val}`);
+            }
+          }
+        }
+      } else {
+        console.log(`medidas: HTTP ${medidasRes.status} - trying historical format`);
+        // Try historical format
+        const yearStr = refMonth.substring(0, 4);
+        const histUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/HIST/medidas_fie_${yearStr}.csv`;
+        console.log(`Fetching historical medidas: ${histUrl}`);
+        const histRes = await fetch(histUrl);
+        if (histRes.ok) {
+          const histText = await histRes.text();
+          const histLines = histText.split("\n").filter(l => l.trim());
+          if (histLines.length > 1) {
+            const mHeader = histLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
+            console.log(`hist medidas headers: ${mHeader.join(", ")}`);
+            const mCnpjIdx = mHeader.findIndex(h => h.includes("CNPJ"));
+            const mCotistasIdx = mHeader.findIndex(h => h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("COTST"));
+            const mDtIdx = mHeader.findIndex(h => h.includes("DT_COMPTC") || h.includes("DT_REFER"));
+            // Filter by refMonth
+            const refDate = `${refMonth.substring(0, 4)}-${refMonth.substring(4, 6)}`;
+            if (mCnpjIdx !== -1 && mCotistasIdx !== -1) {
+              for (let i = 1; i < histLines.length; i++) {
+                const cols = histLines[i].split(";").map(c => c.trim().replace(/"/g, ""));
+                if (mDtIdx !== -1 && !cols[mDtIdx]?.startsWith(refDate)) continue;
+                const cnpj = cleanCnpj(cols[mCnpjIdx] || "");
+                const company = getCompany(cnpj);
+                if (!company) continue;
+                const val = parseNum(cols[mCotistasIdx]);
+                fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
+              }
+            }
+          }
+        } else {
+          console.log(`hist medidas: HTTP ${histRes.status}`);
+        }
+      }
+    } catch (medidasErr) {
+      console.log(`medidas fetch error: ${medidasErr}`);
     }
 
     // Build details
