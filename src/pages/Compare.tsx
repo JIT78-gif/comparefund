@@ -101,6 +101,7 @@ const Compare = () => {
     background: "hsl(228 20% 7%)",
     border: "1px solid hsl(230 20% 15%)",
     borderRadius: 4,
+    color: "hsl(225 30% 93%)",
   };
 
   return (
