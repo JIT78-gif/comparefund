@@ -124,13 +124,13 @@ const Compare = () => {
       <div className="pt-24 px-6 md:px-[60px] max-w-[1400px] mx-auto pb-20">
         {/* Header */}
         <div className="mb-10">
-          <span className="inline-block border border-primary/30 text-primary text-[10px] tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
+          <span className="inline-block border border-primary/30 text-primary text-xs tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
             Live CVM
           </span>
-          <h1 className="font-display font-extrabold text-4xl md:text-6xl tracking-tight leading-[0.95] mb-4">
+          <h1 className="font-display font-extrabold text-3xl md:text-6xl tracking-tight leading-[0.95] mb-4">
             FIDC Comparison
           </h1>
-          <p className="font-serif font-light text-muted-foreground text-lg max-w-xl leading-relaxed">
+          <p className="font-serif font-light text-muted-foreground text-base md:text-lg max-w-xl leading-relaxed">
             Real-time FIDC comparison using official CVM data.
           </p>
         </div>
@@ -138,11 +138,11 @@ const Compare = () => {
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-4 border border-border bg-card p-4 rounded-sm mb-8">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] tracking-[2px] uppercase text-muted-foreground">Year</span>
+            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">Year</span>
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="bg-muted text-foreground border border-border rounded-sm px-3 py-2 text-sm font-mono"
+              className="bg-muted text-foreground border border-border rounded-sm px-3 py-2.5 text-base md:text-sm font-mono"
             >
               {years.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -150,11 +150,11 @@ const Compare = () => {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] tracking-[2px] uppercase text-muted-foreground">Month</span>
+            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">Month</span>
             <select
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
-              className="bg-muted text-foreground border border-border rounded-sm px-3 py-2 text-sm font-mono"
+              className="bg-muted text-foreground border border-border rounded-sm px-3 py-2.5 text-base md:text-sm font-mono"
             >
               {MONTHS.map((m, i) => (
                 <option key={m} value={i}>{m}</option>
@@ -164,7 +164,7 @@ const Compare = () => {
           <div className="flex">
             <button
               onClick={() => setFundType("STANDARD")}
-              className={`px-4 py-2 text-[11px] tracking-[2px] uppercase font-mono rounded-l-sm border transition-colors ${
+              className={`px-4 py-2.5 text-xs tracking-[2px] uppercase font-mono rounded-l-sm border transition-colors ${
                 fundType === "STANDARD"
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-muted text-muted-foreground border-border hover:text-foreground"
@@ -174,7 +174,7 @@ const Compare = () => {
             </button>
             <button
               onClick={() => setFundType("NP")}
-              className={`px-4 py-2 text-[11px] tracking-[2px] uppercase font-mono rounded-r-sm border-t border-b border-r transition-colors ${
+              className={`px-4 py-2.5 text-xs tracking-[2px] uppercase font-mono rounded-r-sm border-t border-b border-r transition-colors ${
                 fundType === "NP"
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-muted text-muted-foreground border-border hover:text-foreground"
@@ -259,8 +259,8 @@ const Compare = () => {
               <ChartCard title="Patrimônio Líquido (R$)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "PL"]} />
                   <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -273,8 +273,8 @@ const Compare = () => {
               <ChartCard title="Inadimplência (%)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Inadimplência"]} />
                   <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -287,8 +287,8 @@ const Compare = () => {
               <ChartCard title="Valor da Cota (%)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Cota"]} />
                   <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -301,8 +301,8 @@ const Compare = () => {
               <ChartCard title="Direitos Creditórios (R$)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Recebíveis"]} />
                   <Bar dataKey="receivables" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -315,8 +315,8 @@ const Compare = () => {
               <ChartCard title="Caixa / Disponibilidades (R$)">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Caixa"]} />
                   <Bar dataKey="cash" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -329,8 +329,8 @@ const Compare = () => {
               <ChartCard title="Quantidade de Cotistas">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
+                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
+                   <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatNumber(value), "Cotistas"]} />
                   <Bar dataKey="shareholders" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -343,11 +343,11 @@ const Compare = () => {
 
             {/* Data Table */}
             <div className="border border-border rounded-sm overflow-x-auto mb-8">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm md:text-base">
                 <thead>
                   <tr className="bg-muted/40">
                     {["Company", "PL", "Receivables", "Cash", "Shareholders", "Delinq. %", "Unit Var %", "Subordinação", "Type"].map((h) => (
-                      <th key={h} className="text-left p-4 text-[10px] tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
+                      <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -356,16 +356,16 @@ const Compare = () => {
                 <tbody>
                   {tableRows.map((row) => (
                     <tr key={row.name} className="border-t border-border hover:bg-muted/20 transition-colors">
-                      <td className="p-4">
+                      <td className="p-3 md:p-4">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${row.color}`} />
+                          <div className={`w-3 h-3 rounded-full ${row.color}`} />
                           <span className="font-display font-semibold text-foreground">{row.name}</span>
                         </div>
                       </td>
-                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
-                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.portfolio)}</td>
-                      <td className="p-4 text-muted-foreground font-mono whitespace-nowrap">{formatCurrency(row.cash)}</td>
-                      <td className="p-4 text-muted-foreground font-mono">{formatNumber(row.shareholders)}</td>
+                      <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
+                      <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.portfolio)}</td>
+                      <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.cash)}</td>
+                      <td className="p-3 md:p-4 text-foreground font-mono">{formatNumber(row.shareholders)}</td>
                       <td className="p-4">
                         <Badge
                           variant="outline"
@@ -378,11 +378,11 @@ const Compare = () => {
                           {formatPercent(row.delinquency)}
                         </Badge>
                       </td>
-                      <td className="p-4 text-muted-foreground font-mono">{formatPercent(row.unit_value)}</td>
-                      <td className="p-4">
-                        <span className="text-muted-foreground/50 text-xs italic" title="Available in fund regulation documents only">N/A</span>
+                      <td className="p-3 md:p-4 text-foreground font-mono">{formatPercent(row.unit_value)}</td>
+                      <td className="p-3 md:p-4">
+                        <span className="text-muted-foreground text-sm italic" title="Available in fund regulation documents only">N/A</span>
                       </td>
-                      <td className="p-4">
+                      <td className="p-3 md:p-4">
                         <Badge
                           variant="outline"
                           className={`text-[10px] tracking-wider uppercase ${
@@ -403,7 +403,7 @@ const Compare = () => {
             {/* Fund Details */}
             {data.details && data.details.length > 0 && (
               <div>
-                <h3 className="font-display text-[11px] tracking-[3px] uppercase text-muted-foreground mb-4">
+                <h3 className="font-display text-xs tracking-[3px] uppercase text-muted-foreground mb-4">
                   Fund Details — Raw CVM Data
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -414,13 +414,13 @@ const Compare = () => {
                           <p className="font-display font-semibold text-sm text-foreground leading-tight mb-1">
                             {d.fund_name}
                           </p>
-                          <p className="text-[10px] text-muted-foreground font-mono">
+                          <p className="text-xs text-muted-foreground font-mono">
                             CNPJ: {d.cnpj} · {d.period}
                           </p>
                         </div>
                         <Badge
                           variant="outline"
-                          className={`text-[9px] tracking-wider uppercase ${
+                          className={`text-xs tracking-wider uppercase ${
                             d.fund_type === "NP"
                               ? "border-secondary/40 text-secondary"
                               : "border-muted-foreground/30 text-muted-foreground"
@@ -466,8 +466,8 @@ function DetailMetric({ label, value, variant }: { label: string; value: string;
   const colorMap = { green: "text-primary", orange: "text-accent", blue: "text-secondary" };
   return (
     <div>
-      <p className="text-[9px] tracking-[1px] uppercase text-muted-foreground mb-1">{label}</p>
-      <p className={`font-mono text-sm font-semibold ${colorMap[variant]}`}>
+      <p className="text-[11px] tracking-[1px] uppercase text-muted-foreground mb-1">{label}</p>
+      <p className={`font-mono text-base font-semibold ${colorMap[variant]}`}>
         {value}
       </p>
     </div>
