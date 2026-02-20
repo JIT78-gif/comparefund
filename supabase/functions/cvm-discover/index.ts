@@ -11,10 +11,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { refMonth, searchTerms, searchField } = await req.json();
+    const { refMonth, searchTerms, searchField, searchCnpjs } = await req.json();
     const month = refMonth || "202406";
     const terms: string[] = searchTerms || ["ATENA", "CIFRA"];
     const field = searchField || "ALL"; // "NAME", "ADMIN", "ALL"
+    const cnpjSearch: string[] = (searchCnpjs || []).map((c: string) => c.replace(/[.\-\/]/g, ""));
 
     const yearNum = parseInt(month.substring(0, 4));
     const zipUrl = yearNum < 2019
@@ -62,10 +63,15 @@ Deno.serve(async (req) => {
         else if (field === "ADMIN") searchText = admin;
         else searchText = name + " " + admin;
 
-        const matched = terms.some((t) => searchText.includes(t.toUpperCase()));
-        if (matched) {
+        const rowCnpj = cleanCnpj(row[cnpjIdx] || "");
+        
+        // Match by CNPJ list or by text search
+        const cnpjMatched = cnpjSearch.length > 0 && cnpjSearch.includes(rowCnpj);
+        const textMatched = terms.length > 0 && terms.some((t) => searchText.includes(t.toUpperCase()));
+        
+        if (cnpjMatched || (cnpjSearch.length === 0 && textMatched)) {
           matches.push({
-            cnpj: cleanCnpj(row[cnpjIdx] || ""),
+            cnpj: rowCnpj,
             name: row[nameIdx] || "",
             admin: adminIdx !== -1 ? row[adminIdx] || "" : "",
             tp_fundo_classe: tpIdx !== -1 ? row[tpIdx] || "" : "",
