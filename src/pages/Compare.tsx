@@ -229,7 +229,7 @@ const Compare = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
                   <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
@@ -243,7 +243,7 @@ const Compare = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Delinquency"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Delinquency"]} />
                   <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
@@ -257,7 +257,7 @@ const Compare = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
-                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Unit Var"]} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} itemStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatPercent(value), "Unit Var"]} />
                   <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
