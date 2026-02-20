@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
@@ -229,9 +229,11 @@ const Compare = () => {
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
-                  {COMPANIES.map((c) => (
-                    <Bar key={c.key} dataKey="assets" fill={c.chartColor} radius={[3, 3, 0, 0]} name={c.label} />
-                  ))}
+                  <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COMPANIES[index]?.chartColor} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartCard>
 
