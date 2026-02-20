@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
@@ -83,23 +83,15 @@ const Compare = () => {
 
   const years = Array.from({ length: 17 }, (_, i) => 2010 + i);
 
-  // Filter to only companies with data (non-zero assets)
-  const activeCompanies = data
-    ? COMPANIES.filter((c) => {
-        const d = (data as Record<string, CompanyData>)[c.key];
-        return d && (d.net_assets > 0 || d.portfolio > 0);
-      })
-    : COMPANIES;
-
   const chartData = data
-    ? activeCompanies.map((c) => {
+    ? COMPANIES.map((c) => {
         const d = (data as Record<string, CompanyData>)[c.key];
         return d ? { name: c.label, assets: d.net_assets, delinquency: d.delinquency, unitVar: d.unit_value } : null;
       }).filter(Boolean)
     : [];
 
   const tableRows = data
-    ? activeCompanies.map((c) => {
+    ? COMPANIES.map((c) => {
         const d = (data as Record<string, CompanyData>)[c.key];
         return d ? { name: c.label, color: c.color, ...d } : null;
       }).filter(Boolean) as ({ name: string; color: string } & CompanyData)[]
@@ -197,7 +189,7 @@ const Compare = () => {
           <>
             {/* Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-              {activeCompanies.map((c) => {
+              {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
                 if (!d) return null;
                 return (
@@ -213,7 +205,7 @@ const Compare = () => {
               })}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-              {activeCompanies.map((c) => {
+              {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
                 if (!d) return null;
                 return (
@@ -237,11 +229,9 @@ const Compare = () => {
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(220 13% 46%)", fontSize: 11 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "hsl(225 30% 93%)" }} formatter={(value: number) => [formatCurrency(value), "Assets"]} />
-                  <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
-                    {chartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={activeCompanies[index]?.chartColor} />
-                    ))}
-                  </Bar>
+                  {COMPANIES.map((c) => (
+                    <Bar key={c.key} dataKey="assets" fill={c.chartColor} radius={[3, 3, 0, 0]} name={c.label} />
+                  ))}
                 </BarChart>
               </ChartCard>
 

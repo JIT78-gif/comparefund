@@ -1,51 +1,70 @@
 
 
-## Fix NP Toggle and Chart Display Issues
+## Add Atena Tecnologia and Cifra S.A. Credit to the Comparison
 
-### Problem 1: Charts showing 4 identical bars per company
-The `chartData` maps each company to a separate data point (row), but then 4 `Bar` components are rendered, all using the same `dataKey` (e.g., `"assets"`). This produces 4 identical bars per company group. The fix is to use a single `Bar` component and color each bar based on the company.
+### Overview
+Currently the page compares only Multiplica vs Red. We'll expand it to compare all 4 companies: Multiplica, Red, Atena Tecnologia, and Cifra S.A. Credit. Since we don't know the CNPJs for Atena and Cifra, we'll first add a CNPJ discovery mechanism that searches CVM data by fund name.
 
-### Problem 2: NP toggle doesn't change data
-When switching to NP, the edge function filters by `fund_type === "NP"`. However, since Atena and Cifra only have Standard CNPJs and Multiplica/Red's fund type classification may not be working reliably, NP returns either zero or the same data. The fix involves verifying the fund type detection logic and ensuring NP data is correctly filtered.
+### Step 1: Create a Discovery Edge Function
 
----
+Create a new edge function `cvm-discover` that:
+- Downloads the CVM ZIP for a given month (e.g., 202501)
+- Parses tab_I to extract all fund names (DENOM_SOCIAL) and their CNPJs
+- Filters by search terms like "ATENA" and "CIFRA"
+- Returns matching fund names and CNPJs so we can identify the correct Standard and NP funds
 
-### Changes
+This is a one-time utility to find the CNPJs. We'll call it, read the logs, and then hardcode the discovered CNPJs.
 
-#### 1. Fix charts in `src/pages/Compare.tsx`
-- Remove the `COMPANIES.map()` that creates multiple `Bar` components per chart
-- Use a single `Bar` with a custom `Cell` component that assigns each bar its company-specific color
-- This way each company gets exactly one bar with its correct color
+### Step 2: Update Edge Function with New Companies
 
-#### 2. Fix NP filtering in `supabase/functions/cvm-compare/index.ts`
-- Add debug logging to show what fund types are detected for each CNPJ
-- Verify the NP_OVERRIDE set includes the correct NP CNPJs for Red (`11489344000122`)
-- Ensure that when fundType="NP" is requested, only NP-classified funds are included in results
-- If Multiplica NP CNPJ `40211675000102` and Red NP CNPJ `11489344000122` aren't being found in the data, log that clearly
+Once we have the CNPJs, update `cvm-compare/index.ts`:
+- Add `atena` and `cifra` entries to the `CNPJS` map with their Standard and NP fund CNPJs
+- Add any NP override entries if needed
+- Update the `fundCounts` initialization to include `atena` and `cifra`
+- Update the `results` aggregation to include all 4 companies
+- Change the response structure from `{ multiplica, red, details }` to a dynamic company map
 
-#### 3. Frontend: Show only companies with data
-- When NP is selected and Atena/Cifra have no NP funds, filter them out of charts and cards (or show them as "No NP fund" gracefully) so the display isn't cluttered with zero-value entries
+### Step 3: Update Frontend to Support 4 Companies
+
+Update `src/pages/Compare.tsx`:
+- Change the `CompareResponse` interface to use a dynamic map of companies instead of only `multiplica` and `red`
+- Define a company config array with names, colors, and display labels for all 4 companies
+- Update metric cards to show a scrollable grid for all 4 companies (PL + Delinquency for each)
+- Update bar charts to show 4 bars per chart instead of 2
+- Update the data table to show 4 rows
+- Update the fund details section to handle all companies
+- Update the page title from "Multiplica vs Red" to something like "FIDC Comparison"
 
 ### Technical Details
 
-**Chart fix** (`Compare.tsx`):
-Replace the chart `Bar` mapping from:
-```text
-{COMPANIES.map((c) => (
-  <Bar key={c.key} dataKey="assets" fill={c.chartColor} ... />
-))}
-```
-To a single Bar with Cell-based coloring:
-```text
-<Bar dataKey="assets" radius={[3, 3, 0, 0]}>
-  {chartData.map((entry, index) => (
-    <Cell key={index} fill={COMPANIES[index].chartColor} />
-  ))}
-</Bar>
-```
+**Discovery function** (`supabase/functions/cvm-discover/index.ts`):
+- POST with `{ refMonth, searchTerms: ["ATENA", "CIFRA"] }`
+- Returns `{ matches: [{ cnpj, name, fund_type_detected }] }`
 
-**Edge function** (`cvm-compare/index.ts`):
-- Add `11489344000122` to NP_OVERRIDE if Red's NP fund isn't auto-detected
-- Ensure fund type detection logs are clear for debugging
-- Deploy and verify with NP request
+**Edge function changes** (`supabase/functions/cvm-compare/index.ts`):
+- CNPJS map: add `atena: [standardCnpj, npCnpj]` and `cifra: [standardCnpj, npCnpj]`
+- Results initialization: add `atena` and `cifra` keys
+- Response: `{ multiplica: {...}, red: {...}, atena: {...}, cifra: {...}, details: [...] }`
+
+**Frontend changes** (`src/pages/Compare.tsx`):
+- Company config:
+```text
+COMPANIES = [
+  { key: "multiplica", label: "Multiplica", color: "bg-primary", chartColor: "hsl(160,100%,45%)" },
+  { key: "red",        label: "Red",        color: "bg-accent",  chartColor: "hsl(20,100%,57%)" },
+  { key: "atena",      label: "Atena",      color: "bg-secondary", chartColor: "hsl(221,100%,65%)" },
+  { key: "cifra",      label: "Cifra",      color: "bg-yellow-500", chartColor: "hsl(45,100%,50%)" },
+]
+```
+- CompareResponse becomes `Record<string, CompanyData> & { details: FundDetail[] }`
+- Metric cards grid: 4 columns for PL, then 4 for delinquency (or 2 rows of 4)
+- Charts: 4 bars per chart
+- Table: 4 rows dynamically generated from company config
+
+### Sequence
+1. Deploy `cvm-discover` and call it to find Atena/Cifra CNPJs
+2. Read logs to get the CNPJs
+3. Update `cvm-compare` with the new company CNPJs
+4. Update the frontend to render all 4 companies
+5. Deploy and test
 
