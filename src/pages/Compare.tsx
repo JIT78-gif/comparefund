@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatNumber, MONTHS } from "@/lib/format";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CompanyData {
   net_assets: number;
@@ -45,6 +46,7 @@ const COMPANIES = [
 ];
 
 const Compare = () => {
+  const { t } = useLanguage();
   const [year, setYear] = useState(2024);
   const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
@@ -125,20 +127,20 @@ const Compare = () => {
         {/* Header */}
         <div className="mb-10">
           <span className="inline-block border border-primary/30 text-primary text-xs tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
-            Live CVM
+            {t("compare.badge")}
           </span>
           <h1 className="font-display font-extrabold text-3xl md:text-6xl tracking-tight leading-[0.95] mb-4">
-            FIDC Comparison
+            {t("compare.title")}
           </h1>
           <p className="font-serif font-light text-muted-foreground text-base md:text-lg max-w-xl leading-relaxed">
-            Real-time FIDC comparison using official CVM data.
+            {t("compare.subtitle")}
           </p>
         </div>
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-4 border border-border bg-card p-4 rounded-sm mb-8">
           <div className="flex items-center gap-2">
-            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">Year</span>
+            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">{t("compare.year")}</span>
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
@@ -150,7 +152,7 @@ const Compare = () => {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">Month</span>
+            <span className="text-xs tracking-[2px] uppercase text-muted-foreground">{t("compare.month")}</span>
             <select
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
@@ -189,14 +191,14 @@ const Compare = () => {
         {isLoading && (
           <div className="text-center py-20">
             <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-muted-foreground text-sm">Fetching CVM data for {MONTHS[month]} {year}...</p>
+            <p className="text-muted-foreground text-sm">{t("compare.loading")} {MONTHS[month]} {year}...</p>
           </div>
         )}
 
         {/* Error */}
         {error && (
           <div className="border border-accent/30 bg-accent/5 p-4 rounded-sm text-accent text-sm">
-            Failed to load data: {(error as Error).message}
+            {t("compare.error")} {(error as Error).message}
           </div>
         )}
 
@@ -213,7 +215,7 @@ const Compare = () => {
                     icon={<div className={`w-5 h-5 rounded-full ${c.color}`} />}
                     label={`${c.label} PL`}
                     value={formatCurrency(d.net_assets)}
-                    subtitle={`Receivables: ${formatCurrency(d.portfolio)}`}
+                    subtitle={`${t("compare.metric.receivables")}: ${formatCurrency(d.portfolio)}`}
                     color="green"
                   />
                 );
@@ -228,9 +230,9 @@ const Compare = () => {
                   <MetricCard
                     key={`${c.key}-delinq`}
                     icon={<span className="text-xl">📊</span>}
-                    label={`${c.label} Delinq.`}
+                    label={`${c.label} ${t("compare.metric.delinq")}`}
                     value={formatPercent(d.delinquency)}
-                    subtitle="Overdue / Portfolio"
+                    subtitle={t("compare.metric.overdue")}
                     color="orange"
                   />
                 );
@@ -245,9 +247,9 @@ const Compare = () => {
                   <MetricCard
                     key={`${c.key}-cash`}
                     icon={<span className="text-xl">💰</span>}
-                    label={`${c.label} Cash`}
+                    label={`${c.label} ${t("compare.metric.cash")}`}
                     value={formatCurrency(d.cash)}
-                    subtitle={`${formatNumber(d.shareholders)} shareholders`}
+                    subtitle={`${formatNumber(d.shareholders)} ${t("compare.metric.shareholders")}`}
                     color="blue"
                   />
                 );
@@ -256,7 +258,7 @@ const Compare = () => {
 
             {/* Charts — 3x2 grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-              <ChartCard title="Patrimônio Líquido (R$)">
+              <ChartCard title={t("compare.chart.pl")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -270,7 +272,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Inadimplência (%)">
+              <ChartCard title={t("compare.chart.delinq")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -284,7 +286,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Valor da Cota (%)">
+              <ChartCard title={t("compare.chart.unit")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -298,7 +300,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Direitos Creditórios (R$)">
+              <ChartCard title={t("compare.chart.receivables")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -312,7 +314,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Caixa / Disponibilidades (R$)">
+              <ChartCard title={t("compare.chart.cash")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -326,7 +328,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title="Quantidade de Cotistas">
+              <ChartCard title={t("compare.chart.shareholders")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                    <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -346,7 +348,7 @@ const Compare = () => {
               <table className="w-full text-sm md:text-base">
                 <thead>
                   <tr className="bg-muted/40">
-                    {["Company", "PL", "Receivables", "Cash", "Shareholders", "Delinq. %", "Unit Var %", "Subordinação", "Type"].map((h) => (
+                    {[t("compare.col.company"), t("compare.col.pl"), t("compare.col.receivables"), t("compare.col.cash"), t("compare.col.shareholders"), t("compare.col.delinq"), t("compare.col.unitvar"), t("compare.col.subordination"), t("compare.col.type")].map((h) => (
                       <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
                         {h}
                       </th>
@@ -380,7 +382,7 @@ const Compare = () => {
                       </td>
                       <td className="p-3 md:p-4 text-foreground font-mono">{formatPercent(row.unit_value)}</td>
                       <td className="p-3 md:p-4">
-                        <span className="text-muted-foreground text-sm italic" title="Available in fund regulation documents only">N/A</span>
+                        <span className="text-muted-foreground text-sm italic" title={t("compare.na")}>{t("compare.na")}</span>
                       </td>
                       <td className="p-3 md:p-4">
                         <Badge
@@ -404,7 +406,7 @@ const Compare = () => {
             {data.details && data.details.length > 0 && (
               <div>
                 <h3 className="font-display text-xs tracking-[3px] uppercase text-muted-foreground mb-4">
-                  Fund Details — Raw CVM Data
+                  {t("compare.fundDetails")}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {data.details.map((d) => (
@@ -430,12 +432,12 @@ const Compare = () => {
                         </Badge>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <DetailMetric label="Net Assets (PL)" value={formatCurrency(d.net_assets)} variant="green" />
-                        <DetailMetric label="Receivables" value={formatCurrency(d.portfolio)} variant="green" />
-                        <DetailMetric label="Cash" value={formatCurrency(d.cash)} variant="green" />
-                        <DetailMetric label="Liabilities" value={formatCurrency(d.liabilities)} variant="orange" />
-                        <DetailMetric label="Overdue" value={formatCurrency(d.overdue)} variant="orange" />
-                        <DetailMetric label="Shareholders" value={formatNumber(d.shareholders)} variant="blue" />
+                        <DetailMetric label={t("compare.detail.netAssets")} value={formatCurrency(d.net_assets)} variant="green" />
+                        <DetailMetric label={t("compare.detail.receivables")} value={formatCurrency(d.portfolio)} variant="green" />
+                        <DetailMetric label={t("compare.detail.cash")} value={formatCurrency(d.cash)} variant="green" />
+                        <DetailMetric label={t("compare.detail.liabilities")} value={formatCurrency(d.liabilities)} variant="orange" />
+                        <DetailMetric label={t("compare.detail.overdue")} value={formatCurrency(d.overdue)} variant="orange" />
+                        <DetailMetric label={t("compare.detail.shareholders")} value={formatNumber(d.shareholders)} variant="blue" />
                       </div>
                     </div>
                   ))}

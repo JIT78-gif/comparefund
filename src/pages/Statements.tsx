@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const COMPANIES = [
   { key: "multiplica", label: "Multiplica" },
@@ -15,20 +16,21 @@ const COMPANIES = [
 ];
 
 const YEARS = Array.from({ length: 7 }, (_, i) => String(2019 + i));
-const MONTH_LABELS = [
-  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+
+const MONTH_KEYS = [
+  "month.jan", "month.feb", "month.mar", "month.apr", "month.may", "month.jun",
+  "month.jul", "month.aug", "month.sep", "month.oct", "month.nov", "month.dec",
 ];
 
 type CompareMode = "companies" | "periods";
 
 const Statements = () => {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<CompareMode>("companies");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["multiplica", "red"]);
   const [singleCompany, setSingleCompany] = useState("multiplica");
   const [fundType, setFundType] = useState("STANDARD");
 
-  // Period selectors
   const [year1, setYear1] = useState("2025");
   const [month1, setMonth1] = useState("01");
   const [year2, setYear2] = useState("2025");
@@ -36,6 +38,8 @@ const Statements = () => {
   const [year3, setYear3] = useState("2025");
   const [month3, setMonth3] = useState("03");
   const [usePeriod3, setUsePeriod3] = useState(false);
+
+  const monthLabels = MONTH_KEYS.map((k) => t(k));
 
   const months = useMemo(() => {
     if (mode === "companies") {
@@ -63,7 +67,6 @@ const Statements = () => {
     );
   };
 
-  // Build columns & getValue based on mode
   const columns = useMemo(() => {
     if (mode === "companies") {
       return selectedCompanies.map((key) => ({
@@ -73,9 +76,9 @@ const Statements = () => {
     }
     return months.map((m) => ({
       key: m,
-      label: `${MONTH_LABELS[parseInt(m.slice(4)) - 1]}/${m.slice(0, 4)}`,
+      label: `${monthLabels[parseInt(m.slice(4)) - 1]}/${m.slice(0, 4)}`,
     }));
-  }, [mode, selectedCompanies, months]);
+  }, [mode, selectedCompanies, months, monthLabels]);
 
   const getValue = useCallback(
     (colKey: string, accountId: string): number => {
@@ -84,14 +87,12 @@ const Statements = () => {
         const month = months[0];
         const companyData = data[month]?.[colKey];
         if (!companyData) return 0;
-        // Sum across all CNPJs for the company
         let total = 0;
         for (const cnpjData of Object.values(companyData)) {
           total += (typeof cnpjData[accountId] === "number" ? cnpjData[accountId] : 0) as number;
         }
         return total;
       }
-      // Period mode: colKey is the month
       const companyData = data[colKey]?.[singleCompany];
       if (!companyData) return 0;
       let total = 0;
@@ -117,7 +118,7 @@ const Statements = () => {
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {MONTH_LABELS.map((ml, i) => (
+          {monthLabels.map((ml, i) => (
             <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{ml}</SelectItem>
           ))}
         </SelectContent>
@@ -140,12 +141,10 @@ const Statements = () => {
       <Navbar />
       <main className="pt-20 px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
         <h1 className="font-display font-extrabold text-2xl md:text-3xl text-foreground mb-6">
-          Demonstrações Financeiras
+          {t("statements.title")}
         </h1>
 
-        {/* Controls */}
         <div className="space-y-4 mb-6">
-          {/* Mode toggle */}
           <div className="flex gap-2">
             <Button
               variant={mode === "companies" ? "default" : "outline"}
@@ -153,7 +152,7 @@ const Statements = () => {
               onClick={() => setMode("companies")}
               className="text-sm"
             >
-              Comparar Empresas
+              {t("statements.compareCompanies")}
             </Button>
             <Button
               variant={mode === "periods" ? "default" : "outline"}
@@ -161,7 +160,7 @@ const Statements = () => {
               onClick={() => setMode("periods")}
               className="text-sm"
             >
-              Comparar Períodos
+              {t("statements.comparePeriods")}
             </Button>
             <div className="ml-auto flex gap-1">
               <Button
@@ -183,10 +182,9 @@ const Statements = () => {
             </div>
           </div>
 
-          {/* Company selection */}
           {mode === "companies" ? (
             <div className="flex flex-wrap items-center gap-4">
-              <span className="text-sm text-muted-foreground font-semibold">Empresas:</span>
+              <span className="text-sm text-muted-foreground font-semibold">{t("statements.companies")}</span>
               {COMPANIES.map((c) => (
                 <label key={c.key} className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
@@ -199,7 +197,7 @@ const Statements = () => {
             </div>
           ) : (
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground font-semibold">Empresa:</span>
+              <span className="text-sm text-muted-foreground font-semibold">{t("statements.company")}</span>
               <Select value={singleCompany} onValueChange={setSingleCompany}>
                 <SelectTrigger className="w-[160px] h-9 text-sm">
                   <SelectValue />
@@ -213,14 +211,13 @@ const Statements = () => {
             </div>
           )}
 
-          {/* Period selection */}
           <div className="flex flex-wrap items-center gap-4">
-            <MonthYearPicker label={mode === "companies" ? "Período:" : "Período 1:"} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} />
+            <MonthYearPicker label={mode === "companies" ? t("statements.period") : t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} />
             {mode === "periods" && (
               <>
-                <MonthYearPicker label="Período 2:" year={year2} setYear={setYear2} month={month2} setMonth={setMonth2} />
+                <MonthYearPicker label={t("statements.period2")} year={year2} setYear={setYear2} month={month2} setMonth={setMonth2} />
                 {usePeriod3 ? (
-                  <MonthYearPicker label="Período 3:" year={year3} setYear={setYear3} month={month3} setMonth={setMonth3} />
+                  <MonthYearPicker label={t("statements.period3")} year={year3} setYear={setYear3} month={month3} setMonth={setMonth3} />
                 ) : null}
                 <Button
                   variant="ghost"
@@ -228,7 +225,7 @@ const Statements = () => {
                   onClick={() => setUsePeriod3(!usePeriod3)}
                   className="text-xs text-muted-foreground"
                 >
-                  {usePeriod3 ? "– Remover 3º período" : "+ Adicionar 3º período"}
+                  {usePeriod3 ? t("statements.removePeriod") : t("statements.addPeriod")}
                 </Button>
               </>
             )}
@@ -237,7 +234,7 @@ const Statements = () => {
 
         {error && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-6 text-destructive text-sm">
-            Erro ao carregar dados: {(error as Error).message}
+            {t("statements.errorLoading")} {(error as Error).message}
           </div>
         )}
 

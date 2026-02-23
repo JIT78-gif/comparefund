@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
 import { ACCOUNT_TREE, flattenTree, getDescendantIds, type FlatAccount } from "@/lib/account-tree";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ColumnDef {
   key: string;
@@ -10,7 +11,6 @@ interface ColumnDef {
 
 interface StatementTreeGridProps {
   columns: ColumnDef[];
-  /** getValue(columnKey, accountId) => number */
   getValue: (colKey: string, accountId: string) => number;
   loading?: boolean;
 }
@@ -32,6 +32,7 @@ function formatBRL(value: number): string {
 }
 
 const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProps) => {
+  const { t } = useLanguage();
   const flatAccounts = useMemo(() => flattenTree(ACCOUNT_TREE), []);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
@@ -40,7 +41,6 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-        // Also collapse descendants
         const descendants = getDescendantIds(ACCOUNT_TREE, id);
         for (const d of descendants) next.delete(d);
       } else {
@@ -57,13 +57,11 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
 
   const collapseAll = () => setExpanded(new Set());
 
-  // Determine visible rows
   const visibleRows = useMemo(() => {
     const visible: FlatAccount[] = [];
     const hiddenParents = new Set<string>();
 
     for (const account of flatAccounts) {
-      // A row is visible if all its ancestors are expanded
       if (account.depth === 0) {
         visible.push(account);
       } else if (account.parentId && expanded.has(account.parentId) && !hiddenParents.has(account.parentId)) {
@@ -79,7 +77,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        <span className="ml-3 text-muted-foreground text-base">Carregando demonstrações...</span>
+        <span className="ml-3 text-muted-foreground text-base">{t("grid.loading")}</span>
       </div>
     );
   }
@@ -88,10 +86,10 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
     <div className="space-y-3">
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1.5">
-          <ChevronsUpDown className="h-3.5 w-3.5" /> Expandir Tudo
+          <ChevronsUpDown className="h-3.5 w-3.5" /> {t("grid.expandAll")}
         </Button>
         <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1.5">
-          <ChevronsDownUp className="h-3.5 w-3.5" /> Recolher Tudo
+          <ChevronsDownUp className="h-3.5 w-3.5" /> {t("grid.collapseAll")}
         </Button>
       </div>
 
@@ -100,7 +98,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
           <thead>
             <tr className="bg-muted/50 border-b border-border">
               <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] sticky left-0 bg-muted/50 z-10">
-                Conta
+                {t("grid.account")}
               </th>
               {columns.map((col) => (
                 <th

@@ -1,7 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Globe } from "lucide-react";
 
 const Navbar = () => {
   const location = useLocation();
+  const { language, setLanguage, t } = useLanguage();
 
   const linkClass = (path: string) =>
     `text-[11px] tracking-[2px] uppercase transition-colors ${
@@ -15,10 +18,20 @@ const Navbar = () => {
       <Link to="/" className="font-display font-extrabold text-sm tracking-tight text-foreground">
         FIDC<span className="text-primary">.</span>Intel
       </Link>
-      <div className="hidden md:flex items-center gap-7">
-        <Link to="/" className={linkClass("/")}>Dashboard</Link>
-        <Link to="/compare" className={linkClass("/compare")}>Compare</Link>
-        <Link to="/statements" className={linkClass("/statements")}>Statements</Link>
+      <div className="flex items-center gap-7">
+        <div className="hidden md:flex items-center gap-7">
+          <Link to="/" className={linkClass("/")}>{t("nav.dashboard")}</Link>
+          <Link to="/compare" className={linkClass("/compare")}>{t("nav.compare")}</Link>
+          <Link to="/statements" className={linkClass("/statements")}>{t("nav.statements")}</Link>
+        </div>
+        <button
+          onClick={() => setLanguage(language === "pt" ? "en" : "pt")}
+          className="flex items-center gap-1.5 text-[11px] tracking-[2px] uppercase text-muted-foreground hover:text-primary transition-colors border border-border rounded-sm px-2.5 py-1.5"
+          title={language === "pt" ? "Switch to English" : "Mudar para Português"}
+        >
+          <Globe className="h-3.5 w-3.5" />
+          <span className="font-mono font-semibold">{language === "pt" ? "EN" : "PT"}</span>
+        </button>
       </div>
     </nav>
   );
