@@ -18,6 +18,7 @@ const Navbar = () => {
       <div className="hidden md:flex items-center gap-7">
         <Link to="/" className={linkClass("/")}>Dashboard</Link>
         <Link to="/compare" className={linkClass("/compare")}>Compare</Link>
+        <Link to="/statements" className={linkClass("/statements")}>Statements</Link>
       </div>
     </nav>
   );
