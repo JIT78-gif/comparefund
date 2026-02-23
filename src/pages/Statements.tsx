@@ -139,18 +139,18 @@ const Statements = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-20 px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
-        <h1 className="font-display font-extrabold text-2xl md:text-3xl text-foreground mb-6">
+      <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
+        <h1 className="font-display font-extrabold text-xl sm:text-2xl md:text-3xl text-foreground mb-4 sm:mb-6">
           {t("statements.title")}
         </h1>
 
-        <div className="space-y-4 mb-6">
-          <div className="flex gap-2">
+        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={mode === "companies" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode("companies")}
-              className="text-sm"
+              className="text-xs sm:text-sm"
             >
               {t("statements.compareCompanies")}
             </Button>
@@ -158,11 +158,11 @@ const Statements = () => {
               variant={mode === "periods" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode("periods")}
-              className="text-sm"
+              className="text-xs sm:text-sm"
             >
               {t("statements.comparePeriods")}
             </Button>
-            <div className="ml-auto flex gap-1">
+            <div className="flex gap-1 ml-auto">
               <Button
                 variant={fundType === "STANDARD" ? "default" : "outline"}
                 size="sm"
@@ -211,7 +211,7 @@ const Statements = () => {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
             <MonthYearPicker label={mode === "companies" ? t("statements.period") : t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} />
             {mode === "periods" && (
               <>
