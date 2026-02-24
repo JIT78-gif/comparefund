@@ -32,9 +32,48 @@ async function rawInvoke(months: string[], fundType: string, timeoutMs: number) 
 }
 
 /**
+ * Read cached statement data directly from the database,
+ * bypassing the edge function transport layer entirely.
+ */
+async function readCacheDirect(
+  months: string[],
+  fundType: string
+): Promise<Record<string, unknown> | null> {
+  console.info("[cvm-invoke] Attempting direct DB cache read for", months, fundType);
+
+  const { data: rows, error } = await supabase
+    .from("statement_cache")
+    .select("ref_month, parsed_payload, expires_at")
+    .in("ref_month", months)
+    .eq("fund_type", fundType);
+
+  if (error || !rows || rows.length === 0) {
+    console.warn("[cvm-invoke] Direct cache read returned nothing", error);
+    return null;
+  }
+
+  const result: Record<string, unknown> = {};
+  const meta: Record<string, string> = {};
+  const now = new Date();
+
+  for (const row of rows) {
+    result[row.ref_month] = row.parsed_payload;
+    const isExpired = new Date(row.expires_at) < now;
+    meta[row.ref_month] = isExpired ? "stale" : "cached";
+  }
+
+  if (Object.keys(result).length === 0) return null;
+
+  result._meta = meta;
+  console.info("[cvm-invoke] Direct cache hit:", Object.keys(meta));
+  return result;
+}
+
+/**
  * Invoke cvm-statements with:
  * - Deterministic client-side timeout via Promise.race
  * - 1 transport-level retry with jittered delay
+ * - Direct DB cache fallback if edge function fails entirely
  */
 export async function invokeStatements(
   months: string[],
@@ -51,10 +90,17 @@ export async function invokeStatements(
       try {
         return await rawInvoke(months, fundType, timeoutMs);
       } catch (retryErr) {
-        console.error("[cvm-invoke] Retry also failed:", retryErr);
-        throw retryErr;
+        console.error("[cvm-invoke] Retry also failed, trying direct DB cache…", retryErr);
       }
+    } else {
+      console.error("[cvm-invoke] Non-transport error, trying direct DB cache…", err);
     }
+
+    // Fallback: read directly from statement_cache table
+    const cached = await readCacheDirect(months, fundType);
+    if (cached) return cached;
+
+    // Nothing worked — throw the original error
     throw err;
   }
 }
