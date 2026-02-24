@@ -31,12 +31,12 @@ const Statements = () => {
   const [singleCompany, setSingleCompany] = useState("multiplica");
   const [fundType, setFundType] = useState("STANDARD");
 
-  const [year1, setYear1] = useState("2025");
-  const [month1, setMonth1] = useState("01");
-  const [year2, setYear2] = useState("2025");
-  const [month2, setMonth2] = useState("02");
-  const [year3, setYear3] = useState("2025");
-  const [month3, setMonth3] = useState("03");
+  const [year1, setYear1] = useState("2024");
+  const [month1, setMonth1] = useState("12");
+  const [year2, setYear2] = useState("2024");
+  const [month2, setMonth2] = useState("11");
+  const [year3, setYear3] = useState("2024");
+  const [month3, setMonth3] = useState("10");
   const [usePeriod3, setUsePeriod3] = useState(false);
 
   const monthLabels = MONTH_KEYS.map((k) => t(k));
