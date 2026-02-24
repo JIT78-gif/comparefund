@@ -1,95 +1,75 @@
 
-I investigated your current setup and the latest telemetry before proposing changes.
+I checked the backend path end-to-end, and here is what I found before proposing the fix:
 
-What I verified:
-- Your Statements page currently calls the backend function correctly, and the request payload is valid (`months`, `fundType`).
-- In your failing sessions, requests show **status 0 / Failed to fetch** repeatedly.
-- In a fresh preview run, the same endpoint returned **200** in ~7.6s and the table loaded correctly.
-- Backend function logs are almost empty during failure windows, which strongly suggests an intermittent transport/runtime path issue (request not completing back to browser), not a permanent syntax/config break.
-- The backend still does expensive live CVM fetch + ZIP parse on demand for each request and processes months in a way that can still spike latency.
+- Your recent user-side logs show repeated browser transport failures (`Failed to fetch`) when calling `cvm-statements`.
+- In those failure windows, function logs were almost empty, which means requests often did not complete into function execution.
+- I tested the same backend directly and from browser automation:
+  - Direct backend invocation returns `200` with valid data.
+  - Browser preflight (`OPTIONS 204`) and POST (`200`) are currently succeeding on `/statements`.
+  - Cache table is populated (`202411`, `202601`), and function logs now show cache hits.
 
-This points to an intermittent reliability issue, not a single fixed bug line. To eliminate recurrence, I’ll shift the flow from “always live fetch” to “cache-first + bounded execution + client fallback”.
+This means the system is currently partially healthy, but there is still an intermittent transport/reliability gap between the UI session and backend calls. I’ll fix this as a resilience issue (not just a single line bug), so the UI remains stable even during transient network/path instability.
 
-Implementation sequence (high-confidence fix):
+Implementation sequence to fix it:
 
-1) Add a persistent monthly cache in the backend database (Lovable Cloud)
-- Create a cache table for statement payloads keyed by:
-  - `ref_month` (YYYYMM)
-  - `fund_type` (STANDARD/NP)
-- Store:
-  - parsed JSON payload
-  - `fetched_at`
-  - `expires_at`
-  - `source_status` (fresh/stale/error)
-  - optional diagnostics (duration/error code)
-- Add unique index on `(ref_month, fund_type)`.
-- Add RLS policies:
-  - public read (safe because this is public market data)
-  - writes only from backend function role (not browser clients)
-
-Why: once a month/fund type is cached, UI loads in milliseconds and avoids repeated upstream ZIP parsing.
-
-2) Refactor `cvm-statements` backend function to cache-first + strict time budgets
-- File: `supabase/functions/cvm-statements/index.ts`
-- New behavior:
-  1. Check cache for each requested month/fundType.
-  2. Return cache immediately when valid.
-  3. For misses, fetch/parse with strict bounded timeouts.
-  4. If upstream fails but stale cache exists, return stale cache with `_meta.stale = true`.
-  5. If no cache and upstream fails, return structured JSON error (never raw transport ambiguity).
-- Add a global execution budget for the request so response always returns before proxy/runtime hard-kill windows.
-- Process multi-month requests with controlled parallelism (avoid sequential long chains and avoid memory spikes).
-- Keep CORS headers on all response paths.
-
-Why: prevents long-running “hang then status 0” behavior and gives predictable JSON outcomes.
-
-3) Harden frontend invoke path with timeout + region fallback + clearer error source
+1) Harden frontend invocation path so network instability does not break the page
 - File: `src/pages/Statements.tsx`
-- Replace direct single invoke call with helper flow:
-  - attempt 1: invoke with explicit timeout
-  - attempt 2 (only on transport failure): retry once with alternate region routing
-  - preserve existing `lastGoodData` behavior
-- Keep retry conservative (max 1) to avoid storms.
-- Improve error display logic:
-  - distinguish timeout vs unavailable vs stale-fallback
-  - if stale cache is shown, display “showing last available data” notice
-- Keep “Try again” button and make it use the same helper path.
+- Replace current timeout logic with a real timeout mechanism:
+  - Current `AbortController` is not wired into `supabase.functions.invoke`, so it does not actually enforce timeout.
+  - Use `Promise.race` between invoke and a timeout promise for deterministic client-side timeout behavior.
+- Add transport retry strategy:
+  - Retry only for transport-level errors (`Failed to fetch`, network errors), max 1 retry.
+  - Add short jittered delay before retry to avoid request storms.
+- Add region failover strategy:
+  - First invoke in default route.
+  - On transport failure only, retry once via explicit alternate region.
+- Keep and prioritize `lastGoodData` during transient failures so grid never collapses to blank state if previously loaded.
 
-Why: even if one route is flaky, UI has deterministic fallback and user-readable state.
+2) Strengthen backend response consistency and diagnostics
+- Files:
+  - `supabase/functions/cvm-statements/index.ts`
+  - `supabase/functions/_shared/cors.ts`
+- Add explicit request lifecycle logs in `cvm-statements`:
+  - request start, months/fundType, cache hit/miss, fetch duration, response status path.
+  - This will make future incidents diagnosable in minutes.
+- Ensure every return path includes consistent JSON body shape and CORS headers (already mostly done, but I’ll normalize all branches).
+- Add explicit, cheap health response path (e.g. `{"ping": true}`) for quick connectivity checks without CVM fetch overhead.
 
-4) Optional but recommended: reduce accidental request churn on control changes
-- Add small debounce (e.g., 300–500ms) before query executes after month/fund toggles.
-- Ensure only meaningful state changes trigger refetch.
+3) Tighten cache fallback behavior for unstable upstream conditions
+- File: `supabase/functions/cvm-statements/index.ts`
+- Keep current cache-first flow, but make fallback deterministic:
+  - If fetch fails and stale cache exists, always return stale with `_meta[month] = "stale"`.
+  - Never block response on cache write operations.
+- Improve error object standardization for frontend parsing:
+  - Keep machine-readable prefixes (`TIMEOUT`, `UNAVAILABLE`, `NETWORK`) and include month context consistently.
+- Preserve current 55s global execution budget and per-fetch timeout behavior.
 
-Why: reduces repeated expensive requests while users are adjusting controls.
+4) Improve user-facing error clarity without noisy false alarms
+- File: `src/pages/Statements.tsx`
+- Update error classification so users can distinguish:
+  - temporary connection problem
+  - month unavailable
+  - request timeout
+  - stale fallback active
+- Keep “Try again” button but make it execute the same robust invoke path (timeout + retry + failover).
 
-5) Verification plan (end-to-end, desktop + mobile)
-- Desktop `/statements`
-  - initial load
-  - switch Standard/NP
-  - switch company/period modes
-  - two/three-period comparison
-- Mobile `/statements`
-  - open from mobile nav
-  - change controls and validate data refresh
-- Network validation
-  - confirm backend requests complete with HTTP response (no recurrent status 0 loops)
-  - verify stale-cache path returns JSON with marker when upstream fails
-- Backend validation
-  - request known good month (202411/202412)
-  - request problematic month and confirm graceful JSON fallback
-- Regression check
-  - ensure StatementTreeGrid still renders correctly with cached payload shape
+5) Verification checklist after implementation
+- Functional checks:
+  - `/statements` initial load
+  - switch STANDARD/NP
+  - switch companies/periods mode
+  - 2 and 3 period comparisons
+- Reliability checks:
+  - confirm network shows `OPTIONS 204` + `POST 200` under normal path
+  - force retry path (simulate transport error) and verify graceful fallback
+  - verify stale banner appears only when `_meta` indicates stale
+- Backend checks:
+  - confirm logs show request start/cache/fetch/result lifecycle
+  - validate response shape for success, partial stale, and all-failed cases
+- Device checks:
+  - desktop and mobile flow validation on `/statements`
 
-Technical notes and trade-offs:
-- This plan intentionally favors reliability over “always live fresh” on every request.
-- Monthly CVM data is naturally coarse-grained, so cache TTL (e.g., 12–24h) is low-risk and high-value.
-- Structured stale fallback eliminates blank/error-only states while preserving transparency in UI.
-- No changes needed to generated integration files; all updates stay in app page + backend function + migration.
-
-Acceptance criteria:
-- Statements page no longer repeatedly fails with “Failed to send request” during normal use.
-- When upstream CVM is slow/unavailable, users still get either:
-  - cached/stale data with clear notice, or
-  - explicit JSON-backed error with actionable message.
-- Works consistently on desktop and mobile with predictable retry behavior.
+Expected outcome:
+- Even when transient network/path issues occur, users no longer see repeated hard failures.
+- They either get fresh data, stale cached data with notice, or a deterministic actionable error—never silent transport ambiguity.
+- Backend incidents become traceable due to request lifecycle logging.
