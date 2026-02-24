@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      statement_cache: {
+        Row: {
+          created_at: string
+          error_detail: string | null
+          expires_at: string
+          fetch_duration_ms: number | null
+          fetched_at: string
+          fund_type: string
+          id: string
+          parsed_payload: Json
+          ref_month: string
+          source_status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_detail?: string | null
+          expires_at?: string
+          fetch_duration_ms?: number | null
+          fetched_at?: string
+          fund_type: string
+          id?: string
+          parsed_payload: Json
+          ref_month: string
+          source_status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_detail?: string | null
+          expires_at?: string
+          fetch_duration_ms?: number | null
+          fetched_at?: string
+          fund_type?: string
+          id?: string
+          parsed_payload?: Json
+          ref_month?: string
+          source_status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
