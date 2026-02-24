@@ -58,25 +58,24 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
 
   console.log(`[cvm-statements] Fetching: ${zipUrl}`);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000); // 120s timeout
+  const timeout = setTimeout(() => controller.abort(), 55000); // 55s — safely under runtime limit
   let response: Response;
   try {
     response = await fetch(zipUrl, { signal: controller.signal });
   } catch (e) {
     clearTimeout(timeout);
     if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error(`Timeout fetching CVM data for ${refMonth}. The CVM server may be slow.`);
+      throw new Error(`TIMEOUT:${refMonth}:CVM server took too long to respond. Try an earlier month.`);
     }
-    throw new Error(`Network error fetching CVM data for ${refMonth}: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`NETWORK:${refMonth}:${e instanceof Error ? e.message : String(e)}`);
   }
   clearTimeout(timeout);
   if (!response.ok) {
-    throw new Error(`Data not available for ${refMonth}. CVM returned ${response.status}`);
+    throw new Error(`UNAVAILABLE:${refMonth}:Data not available (HTTP ${response.status}). Try an earlier month.`);
   }
 
   const zip = await JSZip.loadAsync(await response.arrayBuffer());
 
-  // Per-CNPJ data: { cnpj -> { column -> value } }
   const fundData: Record<string, Record<string, number>> = {};
   const fundNames: Record<string, string> = {};
   const fundTypes: Record<string, string> = {};
@@ -87,7 +86,6 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
     if (file.dir || !filename.endsWith(".csv")) continue;
 
     const isTarget = targetTables.some((t) => filename.includes(`_${t}_`) || filename.endsWith(`_${t}.csv`));
-    // Exclude tab_II, tab_VII etc from tab_I match
     if (!isTarget) continue;
 
     const isTabI = (filename.includes("tab_I_") || filename.endsWith("tab_I.csv")) &&
@@ -103,7 +101,6 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
     const cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
     if (cnpjIdx === -1) continue;
 
-    // Find all TAB_* value columns
     const tabColumns: { name: string; idx: number }[] = [];
     for (let i = 0; i < header.length; i++) {
       if (header[i].startsWith("TAB_")) {
@@ -144,7 +141,6 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
     }
   }
 
-  // Filter by fund type
   const result: Record<string, Record<string, Record<string, number | string>>> = {};
   for (const [cnpj, data] of Object.entries(fundData)) {
     const company = getCompany(cnpj)!;
@@ -178,20 +174,35 @@ Deno.serve(async (req) => {
     }
 
     const results: Record<string, Record<string, Record<string, Record<string, number | string>>>> = {};
+    const errors: Record<string, string> = {};
 
+    // Fetch each month independently — one failure won't block others
     for (const month of months) {
       if (typeof month !== "string" || month.length !== 6) {
-        return new Response(
-          JSON.stringify({ error: `Invalid month format: ${month}. Must be YYYYMM` }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        errors[month] = `Invalid month format: ${month}. Must be YYYYMM`;
+        continue;
       }
-      results[month] = await fetchMonthData(month, fundType);
+      try {
+        results[month] = await fetchMonthData(month, fundType);
+      } catch (err) {
+        console.error(`[cvm-statements] Error for ${month}:`, err);
+        errors[month] = err instanceof Error ? err.message : String(err);
+      }
     }
 
-    return new Response(JSON.stringify(results), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // If we got at least some data, return partial success
+    if (Object.keys(results).length > 0) {
+      return new Response(
+        JSON.stringify({ ...results, ...(Object.keys(errors).length > 0 ? { _errors: errors } : {}) }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // All months failed
+    return new Response(
+      JSON.stringify({ error: "All requested months failed", details: errors }),
+      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (err) {
     console.error("[cvm-statements] Error:", err);
     return new Response(

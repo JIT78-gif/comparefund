@@ -1,12 +1,14 @@
-import { useState, useMemo, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StatementTreeGrid from "@/components/StatementTreeGrid";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 const COMPANIES = [
   { key: "multiplica", label: "Multiplica" },
@@ -24,8 +26,61 @@ const MONTH_KEYS = [
 
 type CompareMode = "companies" | "periods";
 
+function classifyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("Failed to send") || msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    return "The server is taking too long to respond. This usually happens when CVM data is slow. Please try again or select an earlier month.";
+  }
+  if (msg.includes("TIMEOUT")) {
+    const parts = msg.split(":");
+    return parts[2] || "Request timed out. Try an earlier month.";
+  }
+  if (msg.includes("UNAVAILABLE")) {
+    const parts = msg.split(":");
+    return parts[2] || "Data not available for this month. Try an earlier month.";
+  }
+  if (msg.includes("All requested months failed")) {
+    return "Could not load data for any of the selected months. Please try earlier months.";
+  }
+  return msg;
+}
+
+const MonthYearPicker = ({
+  year, setYear, month, setMonth, label, monthLabels,
+}: {
+  year: string; setYear: (v: string) => void;
+  month: string; setMonth: (v: string) => void;
+  label: string;
+  monthLabels: string[];
+}) => (
+  <div className="flex items-center gap-2">
+    <span className="text-sm text-muted-foreground">{label}</span>
+    <Select value={month} onValueChange={setMonth}>
+      <SelectTrigger className="w-[80px] h-9 text-sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {monthLabels.map((ml, i) => (
+          <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{ml}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <Select value={year} onValueChange={setYear}>
+      <SelectTrigger className="w-[90px] h-9 text-sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {YEARS.map((y) => (
+          <SelectItem key={y} value={y}>{y}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+);
+
 const Statements = () => {
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<CompareMode>("companies");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["multiplica", "red"]);
   const [singleCompany, setSingleCompany] = useState("multiplica");
@@ -41,6 +96,9 @@ const Statements = () => {
 
   const monthLabels = MONTH_KEYS.map((k) => t(k));
 
+  // Keep reference to last successful data to avoid blank screen on refetch error
+  const lastGoodData = useRef<Record<string, Record<string, Record<string, Record<string, number | string>>>> | null>(null);
+
   const months = useMemo(() => {
     if (mode === "companies") {
       return [`${year1}${month1}`];
@@ -50,19 +108,29 @@ const Statements = () => {
     return m;
   }, [mode, year1, month1, year2, month2, year3, month3, usePeriod3]);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ["cvm-statements", months, fundType],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("cvm-statements", {
         body: { months, fundType },
       });
       if (error) throw error;
+      // Store as last good data
+      lastGoodData.current = data;
       return data as Record<string, Record<string, Record<string, Record<string, number | string>>>>;
     },
-    retry: 0,
+    retry: 1,
+    retryDelay: 3000,
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   });
+
+  const displayData = data ?? lastGoodData.current;
+
+  const handleRetry = () => {
+    queryClient.invalidateQueries({ queryKey: ["cvm-statements", months, fundType] });
+  };
 
   const toggleCompany = (key: string) => {
     setSelectedCompanies((prev) =>
@@ -85,10 +153,10 @@ const Statements = () => {
 
   const getValue = useCallback(
     (colKey: string, accountId: string): number => {
-      if (!data) return 0;
+      if (!displayData) return 0;
       if (mode === "companies") {
         const month = months[0];
-        const companyData = data[month]?.[colKey];
+        const companyData = displayData[month]?.[colKey];
         if (!companyData) return 0;
         let total = 0;
         for (const cnpjData of Object.values(companyData)) {
@@ -96,7 +164,7 @@ const Statements = () => {
         }
         return total;
       }
-      const companyData = data[colKey]?.[singleCompany];
+      const companyData = displayData[colKey]?.[singleCompany];
       if (!companyData) return 0;
       let total = 0;
       for (const cnpjData of Object.values(companyData)) {
@@ -104,39 +172,7 @@ const Statements = () => {
       }
       return total;
     },
-    [data, mode, months, singleCompany]
-  );
-
-  const MonthYearPicker = ({
-    year, setYear, month, setMonth, label,
-  }: {
-    year: string; setYear: (v: string) => void;
-    month: string; setMonth: (v: string) => void;
-    label: string;
-  }) => (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <Select value={month} onValueChange={setMonth}>
-        <SelectTrigger className="w-[80px] h-9 text-sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {monthLabels.map((ml, i) => (
-            <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{ml}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={year} onValueChange={setYear}>
-        <SelectTrigger className="w-[90px] h-9 text-sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {YEARS.map((y) => (
-            <SelectItem key={y} value={y}>{y}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    [displayData, mode, months, singleCompany]
   );
 
   return (
@@ -215,12 +251,12 @@ const Statements = () => {
           )}
 
           <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
-            <MonthYearPicker label={mode === "companies" ? t("statements.period") : t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} />
+            <MonthYearPicker label={mode === "companies" ? t("statements.period") : t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
             {mode === "periods" && (
               <>
-                <MonthYearPicker label={t("statements.period2")} year={year2} setYear={setYear2} month={month2} setMonth={setMonth2} />
+                <MonthYearPicker label={t("statements.period2")} year={year2} setYear={setYear2} month={month2} setMonth={setMonth2} monthLabels={monthLabels} />
                 {usePeriod3 ? (
-                  <MonthYearPicker label={t("statements.period3")} year={year3} setYear={setYear3} month={month3} setMonth={setMonth3} />
+                  <MonthYearPicker label={t("statements.period3")} year={year3} setYear={setYear3} month={month3} setMonth={setMonth3} monthLabels={monthLabels} />
                 ) : null}
                 <Button
                   variant="ghost"
@@ -236,9 +272,23 @@ const Statements = () => {
         </div>
 
         {error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-6 text-destructive text-sm">
-            {t("statements.errorLoading")} {(error as Error).message}
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{t("statements.errorLoading")}</AlertTitle>
+            <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span>{classifyError(error)}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                disabled={isFetching}
+                className="w-fit"
+              >
+                <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? "animate-spin" : ""}`} />
+                {t("statements.tryAgain") || "Try again"}
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
 
         <StatementTreeGrid columns={columns} getValue={getValue} loading={isLoading} />
