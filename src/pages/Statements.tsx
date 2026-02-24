@@ -59,6 +59,8 @@ const Statements = () => {
       if (error) throw error;
       return data as Record<string, Record<string, Record<string, Record<string, number | string>>>>;
     },
+    retry: 1,
+    staleTime: 5 * 60 * 1000,
   });
 
   const toggleCompany = (key: string) => {
