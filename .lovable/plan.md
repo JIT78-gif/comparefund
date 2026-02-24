@@ -1,59 +1,95 @@
 
-Goal: eliminate the recurring “Failed to send a request to the Edge Function” error on the Statements page, then re-test end-to-end and keep iterating until the flow is stable on both desktop and mobile.
+I investigated your current setup and the latest telemetry before proposing changes.
 
-What I found from debugging:
-- The frontend is sending valid requests to the backend function (`/functions/v1/cvm-statements`) with correct headers.
-- CORS preflight succeeds (204 with expected allow headers/methods).
-- Direct backend function calls return 200 with valid data for `202411` and `202412`.
-- In the failing user sessions, requests appear as network-level “Failed to fetch”, not clean JSON errors.
-- The current backend timeout for the CVM download is set to 120s, which is risky because runtime limits can terminate execution before a response is sent, causing the exact client-side network failure text you’re seeing.
+What I verified:
+- Your Statements page currently calls the backend function correctly, and the request payload is valid (`months`, `fundType`).
+- In your failing sessions, requests show **status 0 / Failed to fetch** repeatedly.
+- In a fresh preview run, the same endpoint returned **200** in ~7.6s and the table loaded correctly.
+- Backend function logs are almost empty during failure windows, which strongly suggests an intermittent transport/runtime path issue (request not completing back to browser), not a permanent syntax/config break.
+- The backend still does expensive live CVM fetch + ZIP parse on demand for each request and processes months in a way that can still spike latency.
 
-Do I know what the issue is?
-- Yes: the function can be terminated before returning (especially under slow upstream CVM responses), which surfaces to the browser as “Failed to send request” instead of a normal backend error response.
+This points to an intermittent reliability issue, not a single fixed bug line. To eliminate recurrence, I’ll shift the flow from “always live fetch” to “cache-first + bounded execution + client fallback”.
 
-Implementation plan:
+Implementation sequence (high-confidence fix):
 
-1) Harden backend function response behavior (primary fix)
+1) Add a persistent monthly cache in the backend database (Lovable Cloud)
+- Create a cache table for statement payloads keyed by:
+  - `ref_month` (YYYYMM)
+  - `fund_type` (STANDARD/NP)
+- Store:
+  - parsed JSON payload
+  - `fetched_at`
+  - `expires_at`
+  - `source_status` (fresh/stale/error)
+  - optional diagnostics (duration/error code)
+- Add unique index on `(ref_month, fund_type)`.
+- Add RLS policies:
+  - public read (safe because this is public market data)
+  - writes only from backend function role (not browser clients)
+
+Why: once a month/fund type is cached, UI loads in milliseconds and avoids repeated upstream ZIP parsing.
+
+2) Refactor `cvm-statements` backend function to cache-first + strict time budgets
 - File: `supabase/functions/cvm-statements/index.ts`
-- Change upstream fetch timeout from 120000ms to a safe value below runtime limits (55s).
-- Ensure every failure path returns a structured JSON error quickly (with month and reason), instead of risking silent runtime termination.
-- Add explicit guardrails per month so one problematic month does not create ambiguous client failures.
-- Keep CORS headers on all responses unchanged.
+- New behavior:
+  1. Check cache for each requested month/fundType.
+  2. Return cache immediately when valid.
+  3. For misses, fetch/parse with strict bounded timeouts.
+  4. If upstream fails but stale cache exists, return stale cache with `_meta.stale = true`.
+  5. If no cache and upstream fails, return structured JSON error (never raw transport ambiguity).
+- Add a global execution budget for the request so response always returns before proxy/runtime hard-kill windows.
+- Process multi-month requests with controlled parallelism (avoid sequential long chains and avoid memory spikes).
+- Keep CORS headers on all response paths.
 
-2) Make Statements frontend request path more resilient
+Why: prevents long-running “hang then status 0” behavior and gives predictable JSON outcomes.
+
+3) Harden frontend invoke path with timeout + region fallback + clearer error source
 - File: `src/pages/Statements.tsx`
-- Replace generic invoke error surfacing with a robust request helper:
-  - classify network timeout vs unavailable month vs backend error,
-  - preserve last successful data while new request is running,
-  - expose clear, human-readable UI message (not raw transport text).
-- Add a visible “Try again” action in the error block to refetch without forcing page reload.
-- Keep retry strategy conservative to avoid request storms.
+- Replace direct single invoke call with helper flow:
+  - attempt 1: invoke with explicit timeout
+  - attempt 2 (only on transport failure): retry once with alternate region routing
+  - preserve existing `lastGoodData` behavior
+- Keep retry conservative (max 1) to avoid storms.
+- Improve error display logic:
+  - distinguish timeout vs unavailable vs stale-fallback
+  - if stale cache is shown, display “showing last available data” notice
+- Keep “Try again” button and make it use the same helper path.
 
-3) Stabilize month defaults/fallback behavior
-- Keep a known-good default month on first load.
-- If selected month is unavailable/slow, show actionable hint (e.g., try previous month) instead of generic failure message.
-- Do not auto-loop through months; keep behavior predictable and user-controlled.
+Why: even if one route is flaky, UI has deterministic fallback and user-readable state.
 
-4) Verify mobile and desktop end-to-end after fixes
-- Desktop `/statements`:
-  - load in Compare Companies mode,
-  - switch fund type STANDARD/NP,
-  - change month/year and confirm data refresh.
-- Mobile viewport `/statements`:
-  - open via mobile nav,
-  - verify controls wrap correctly and request still succeeds,
-  - verify no blocked interactions.
-- Network verification:
-  - confirm POST requests complete with normal status responses (not “Failed to fetch”).
-- Backend verification:
-  - call function for `202412` and `202411`,
-  - test a failure case month to confirm graceful JSON error (not transport failure).
+4) Optional but recommended: reduce accidental request churn on control changes
+- Add small debounce (e.g., 300–500ms) before query executes after month/fund toggles.
+- Ensure only meaningful state changes trigger refetch.
 
-5) Secondary cleanup (non-blocking but useful)
-- Investigate and remove the “Function components cannot be given refs” warnings seen in console (MonthYearPicker / StatementTreeGrid paths), since these warnings can hide important runtime logs during future debugging.
+Why: reduces repeated expensive requests while users are adjusting controls.
+
+5) Verification plan (end-to-end, desktop + mobile)
+- Desktop `/statements`
+  - initial load
+  - switch Standard/NP
+  - switch company/period modes
+  - two/three-period comparison
+- Mobile `/statements`
+  - open from mobile nav
+  - change controls and validate data refresh
+- Network validation
+  - confirm backend requests complete with HTTP response (no recurrent status 0 loops)
+  - verify stale-cache path returns JSON with marker when upstream fails
+- Backend validation
+  - request known good month (202411/202412)
+  - request problematic month and confirm graceful JSON fallback
+- Regression check
+  - ensure StatementTreeGrid still renders correctly with cached payload shape
+
+Technical notes and trade-offs:
+- This plan intentionally favors reliability over “always live fresh” on every request.
+- Monthly CVM data is naturally coarse-grained, so cache TTL (e.g., 12–24h) is low-risk and high-value.
+- Structured stale fallback eliminates blank/error-only states while preserving transparency in UI.
+- No changes needed to generated integration files; all updates stay in app page + backend function + migration.
 
 Acceptance criteria:
-- Statements page loads data consistently without “Failed to send request” transport errors.
-- On slow/unavailable upstream data, user sees a clear error message and retry option.
-- Same behavior works on desktop and mobile.
-- Network panel shows completed requests or explicit backend JSON errors (no silent connection failures).
+- Statements page no longer repeatedly fails with “Failed to send request” during normal use.
+- When upstream CVM is slow/unavailable, users still get either:
+  - cached/stale data with clear notice, or
+  - explicit JSON-backed error with actionable message.
+- Works consistently on desktop and mobile with predictable retry behavior.
