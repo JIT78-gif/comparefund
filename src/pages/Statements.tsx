@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AlertTriangle, RefreshCw, Info } from "lucide-react";
+import { AlertTriangle, RefreshCw, Info, WifiOff } from "lucide-react";
+import { invokeStatements, classifyError } from "@/lib/cvm-invoke";
 
 const COMPANIES = [
   { key: "multiplica", label: "Multiplica" },
@@ -25,42 +25,6 @@ const MONTH_KEYS = [
 ];
 
 type CompareMode = "companies" | "periods";
-
-function classifyError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes("Failed to send") || msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-    return "The server is taking too long to respond. This usually happens when CVM data is slow. Please try again or select an earlier month.";
-  }
-  if (msg.includes("TIMEOUT")) {
-    const parts = msg.split(":");
-    return parts[2] || "Request timed out. Try an earlier month.";
-  }
-  if (msg.includes("UNAVAILABLE")) {
-    const parts = msg.split(":");
-    return parts[2] || "Data not available for this month. Try an earlier month.";
-  }
-  if (msg.includes("All requested months failed")) {
-    return "Could not load data for any of the selected months. Please try earlier months.";
-  }
-  return msg;
-}
-
-async function invokeWithTimeout(months: string[], fundType: string, timeoutMs = 60_000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const { data, error } = await supabase.functions.invoke("cvm-statements", {
-      body: { months, fundType },
-    });
-    clearTimeout(timer);
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    clearTimeout(timer);
-    throw err;
-  }
-}
 
 const MonthYearPicker = ({
   year, setYear, month, setMonth, label, monthLabels,
@@ -138,7 +102,7 @@ const Statements = () => {
     queryKey: ["cvm-statements", debouncedKey.months, debouncedKey.fundType],
     queryFn: async () => {
       setStaleMonths([]);
-      const result = await invokeWithTimeout(debouncedKey.months, debouncedKey.fundType, 65_000);
+      const result = await invokeStatements(debouncedKey.months, debouncedKey.fundType, 65_000);
 
       // Check _meta for stale entries
       if (result?._meta) {
@@ -149,15 +113,12 @@ const Statements = () => {
       }
 
       // Remove internal keys before storing
-      const cleaned = { ...result };
-      delete cleaned._meta;
-      delete cleaned._errors;
+      const { _meta, _errors, ...cleaned } = result as Record<string, unknown>;
 
-      lastGoodData.current = cleaned;
-      return cleaned as Record<string, Record<string, Record<string, Record<string, number | string>>>>;
+      lastGoodData.current = cleaned as Record<string, Record<string, Record<string, Record<string, number | string>>>>;
+      return lastGoodData.current;
     },
-    retry: 1,
-    retryDelay: 3000,
+    retry: 0, // retries handled inside invokeStatements
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
@@ -291,7 +252,7 @@ const Statements = () => {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>{t("statements.errorLoading")}</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span>{classifyError(error)}</span>
+              <span>{classifyError(error).message}</span>
               <Button variant="outline" size="sm" onClick={handleRetry} disabled={isFetching} className="w-fit">
                 <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? "animate-spin" : ""}`} />
                 {t("statements.tryAgain") || "Try again"}

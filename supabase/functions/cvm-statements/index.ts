@@ -8,8 +8,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const CACHE_TTL_HOURS = 24;
-const FETCH_TIMEOUT_MS = 45_000; // 45s per upstream fetch
-const GLOBAL_BUDGET_MS = 55_000; // 55s total execution budget
+const FETCH_TIMEOUT_MS = 45_000;
+const GLOBAL_BUDGET_MS = 55_000;
 
 const CNPJS: Record<string, string[]> = {
   multiplica: ["23216398000101", "40211675000102"],
@@ -113,7 +113,7 @@ async function writeCacheError(refMonth: string, fundType: string, errorMsg: str
           fund_type: fundType,
           parsed_payload: {},
           fetched_at: new Date().toISOString(),
-          expires_at: new Date().toISOString(), // expired immediately
+          expires_at: new Date().toISOString(),
           source_status: "error",
           error_detail: errorMsg,
         },
@@ -135,7 +135,7 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
     ? `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/HIST/inf_mensal_fidc_${yearNum}.zip`
     : `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/inf_mensal_fidc_${refMonth}.zip`;
 
-  console.log(`[cvm] Fetching ${zipUrl} (timeout ${timeout}ms)`);
+  console.log(`[cvm-fetch] month=${refMonth} url=${zipUrl} timeout=${timeout}ms`);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   let response: Response;
@@ -220,10 +220,22 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID().slice(0, 8);
   const budgetDeadline = Date.now() + GLOBAL_BUDGET_MS;
 
   try {
-    const { months, fundType } = await req.json();
+    const body = await req.json();
+
+    // Health/ping endpoint
+    if (body?.ping) {
+      console.log(`[${requestId}] ping`);
+      return new Response(
+        JSON.stringify({ ping: true, ts: Date.now() }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { months, fundType } = body;
 
     if (!months || !Array.isArray(months) || months.length === 0) {
       return new Response(
@@ -233,11 +245,12 @@ Deno.serve(async (req) => {
     }
 
     const ft = fundType || "STANDARD";
+    console.log(`[${requestId}] START months=${JSON.stringify(months)} fundType=${ft}`);
+
     const results: Record<string, MonthResult> = {};
     const errors: Record<string, string> = {};
     const meta: Record<string, string> = {};
 
-    // Process months with controlled parallelism (max 2 concurrent)
     const processMonth = async (month: string) => {
       if (typeof month !== "string" || month.length !== 6) {
         errors[month] = `Invalid month format: ${month}. Must be YYYYMM`;
@@ -247,7 +260,7 @@ Deno.serve(async (req) => {
       // 1) Try cache first
       const cached = await readCache(month, ft);
       if (cached && cached.status === "fresh" && Object.keys(cached.payload).length > 0) {
-        console.log(`[cvm] Cache HIT (fresh) for ${month}/${ft}`);
+        console.log(`[${requestId}] CACHE HIT fresh ${month}/${ft}`);
         results[month] = cached.payload;
         meta[month] = "cached";
         return;
@@ -258,17 +271,18 @@ Deno.serve(async (req) => {
       try {
         const data = await fetchMonthData(month, ft, budgetDeadline);
         const duration = Date.now() - start;
+        console.log(`[${requestId}] FETCH OK ${month} ${duration}ms`);
         results[month] = data;
         meta[month] = "live";
         // Write to cache in background (don't block response)
         writeCache(month, ft, data, duration);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[cvm] Fetch failed for ${month}:`, errMsg);
+        console.error(`[${requestId}] FETCH FAIL ${month}: ${errMsg}`);
 
-        // 3) Fallback to stale cache
+        // 3) Fallback to stale cache (any cache, even expired)
         if (cached && Object.keys(cached.payload).length > 0) {
-          console.log(`[cvm] Using stale cache for ${month}/${ft}`);
+          console.log(`[${requestId}] STALE FALLBACK ${month}/${ft}`);
           results[month] = cached.payload;
           meta[month] = "stale";
         } else {
@@ -278,9 +292,9 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Run months sequentially to stay within budget
     for (const month of months) {
       if (Date.now() >= budgetDeadline - 3000) {
+        console.warn(`[${requestId}] BUDGET EXHAUSTED at ${month}`);
         errors[month] = `TIMEOUT:${month}:Execution budget exhausted.`;
         continue;
       }
@@ -288,6 +302,7 @@ Deno.serve(async (req) => {
     }
 
     if (Object.keys(results).length > 0) {
+      console.log(`[${requestId}] DONE results=${Object.keys(results).join(",")} meta=${JSON.stringify(meta)} errors=${Object.keys(errors).join(",") || "none"}`);
       return new Response(
         JSON.stringify({
           ...results,
@@ -298,12 +313,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    console.error(`[${requestId}] ALL FAILED errors=${JSON.stringify(errors)}`);
     return new Response(
       JSON.stringify({ error: "All requested months failed", details: errors }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("[cvm] Error:", err);
+    console.error(`[${requestId}] UNHANDLED:`, err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
