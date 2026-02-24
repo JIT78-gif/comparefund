@@ -1,5 +1,15 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import JSZip from "npm:jszip@3.10.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+const CACHE_TTL_HOURS = 24;
+const FETCH_TIMEOUT_MS = 45_000; // 45s per upstream fetch
+const GLOBAL_BUDGET_MS = 55_000; // 55s total execution budget
 
 const CNPJS: Record<string, string[]> = {
   multiplica: ["23216398000101", "40211675000102"],
@@ -50,28 +60,97 @@ async function parseCsvFile(file: JSZip.JSZipObject): Promise<ParsedTable> {
   return { header, rows };
 }
 
-async function fetchMonthData(refMonth: string, fundType?: string) {
+type MonthResult = Record<string, Record<string, Record<string, number | string>>>;
+
+// ── Cache helpers ──────────────────────────────────────────────
+
+async function readCache(refMonth: string, fundType: string): Promise<{ payload: MonthResult; status: string } | null> {
+  const { data, error } = await supabase
+    .from("statement_cache")
+    .select("parsed_payload, source_status, expires_at")
+    .eq("ref_month", refMonth)
+    .eq("fund_type", fundType)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const isExpired = new Date(data.expires_at) < new Date();
+  return {
+    payload: data.parsed_payload as MonthResult,
+    status: isExpired ? "stale" : data.source_status,
+  };
+}
+
+async function writeCache(refMonth: string, fundType: string, payload: MonthResult, durationMs: number, status = "fresh") {
+  try {
+    const expiresAt = new Date(Date.now() + CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString();
+    await supabase
+      .from("statement_cache")
+      .upsert(
+        {
+          ref_month: refMonth,
+          fund_type: fundType,
+          parsed_payload: payload,
+          fetched_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          source_status: status,
+          fetch_duration_ms: durationMs,
+          error_detail: null,
+        },
+        { onConflict: "ref_month,fund_type" }
+      );
+  } catch (e) {
+    console.error(`[cache-write] Failed for ${refMonth}/${fundType}:`, e);
+  }
+}
+
+async function writeCacheError(refMonth: string, fundType: string, errorMsg: string) {
+  try {
+    await supabase
+      .from("statement_cache")
+      .upsert(
+        {
+          ref_month: refMonth,
+          fund_type: fundType,
+          parsed_payload: {},
+          fetched_at: new Date().toISOString(),
+          expires_at: new Date().toISOString(), // expired immediately
+          source_status: "error",
+          error_detail: errorMsg,
+        },
+        { onConflict: "ref_month,fund_type" }
+      );
+  } catch (e) {
+    console.error(`[cache-error-write] Failed for ${refMonth}/${fundType}:`, e);
+  }
+}
+
+// ── CVM fetch ──────────────────────────────────────────────────
+
+async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline: number): Promise<MonthResult> {
+  const remaining = budgetDeadline - Date.now();
+  const timeout = Math.min(FETCH_TIMEOUT_MS, Math.max(remaining - 3000, 5000));
+
   const yearNum = parseInt(refMonth.substring(0, 4));
   const zipUrl = yearNum < 2019
     ? `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/HIST/inf_mensal_fidc_${yearNum}.zip`
     : `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/inf_mensal_fidc_${refMonth}.zip`;
 
-  console.log(`[cvm-statements] Fetching: ${zipUrl}`);
+  console.log(`[cvm] Fetching ${zipUrl} (timeout ${timeout}ms)`);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55000); // 55s — safely under runtime limit
+  const timer = setTimeout(() => controller.abort(), timeout);
   let response: Response;
   try {
     response = await fetch(zipUrl, { signal: controller.signal });
   } catch (e) {
-    clearTimeout(timeout);
+    clearTimeout(timer);
     if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error(`TIMEOUT:${refMonth}:CVM server took too long to respond. Try an earlier month.`);
+      throw new Error(`TIMEOUT:${refMonth}:CVM server took too long to respond.`);
     }
     throw new Error(`NETWORK:${refMonth}:${e instanceof Error ? e.message : String(e)}`);
   }
-  clearTimeout(timeout);
+  clearTimeout(timer);
   if (!response.ok) {
-    throw new Error(`UNAVAILABLE:${refMonth}:Data not available (HTTP ${response.status}). Try an earlier month.`);
+    throw new Error(`UNAVAILABLE:${refMonth}:Data not available (HTTP ${response.status}).`);
   }
 
   const zip = await JSZip.loadAsync(await response.arrayBuffer());
@@ -79,12 +158,10 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
   const fundData: Record<string, Record<string, number>> = {};
   const fundNames: Record<string, string> = {};
   const fundTypes: Record<string, string> = {};
-
   const targetTables = ["tab_I", "tab_III", "tab_IV"];
 
   for (const [filename, file] of Object.entries(zip.files)) {
     if (file.dir || !filename.endsWith(".csv")) continue;
-
     const isTarget = targetTables.some((t) => filename.includes(`_${t}_`) || filename.endsWith(`_${t}.csv`));
     if (!isTarget) continue;
 
@@ -94,7 +171,6 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
     const isTabIV = filename.includes("tab_IV");
     if (!isTabI && !isTabIII && !isTabIV) continue;
 
-    console.log(`[cvm-statements] Parsing: ${filename}`);
     const { header, rows } = await parseCsvFile(file);
     if (!header.length) continue;
 
@@ -103,9 +179,7 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
 
     const tabColumns: { name: string; idx: number }[] = [];
     for (let i = 0; i < header.length; i++) {
-      if (header[i].startsWith("TAB_")) {
-        tabColumns.push({ name: header[i], idx: i });
-      }
+      if (header[i].startsWith("TAB_")) tabColumns.push({ name: header[i], idx: i });
     }
 
     const nameIdx = header.indexOf("DENOM_SOCIAL");
@@ -116,52 +190,37 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
       const cnpj = cleanCnpj(row[cnpjIdx] || "");
       const company = getCompany(cnpj);
       if (!company) continue;
-
-      if (nameIdx !== -1 && !fundNames[cnpj]) {
-        fundNames[cnpj] = row[nameIdx] || "";
-      }
-
+      if (nameIdx !== -1 && !fundNames[cnpj]) fundNames[cnpj] = row[nameIdx] || "";
       if (isTabI && !fundTypes[cnpj]) {
-        fundTypes[cnpj] = getFundType(
-          cnpj,
-          fundNames[cnpj] || "",
-          tpFundoIdx !== -1 ? row[tpFundoIdx] || "" : "",
-          condominioIdx !== -1 ? row[condominioIdx] || "" : ""
-        );
+        fundTypes[cnpj] = getFundType(cnpj, fundNames[cnpj] || "", tpFundoIdx !== -1 ? row[tpFundoIdx] || "" : "", condominioIdx !== -1 ? row[condominioIdx] || "" : "");
       }
-
       if (!fundData[cnpj]) fundData[cnpj] = {};
-
       for (const col of tabColumns) {
         const val = parseNum(row[col.idx]);
-        if (val !== 0) {
-          fundData[cnpj][col.name] = (fundData[cnpj][col.name] || 0) + val;
-        }
+        if (val !== 0) fundData[cnpj][col.name] = (fundData[cnpj][col.name] || 0) + val;
       }
     }
   }
 
-  const result: Record<string, Record<string, Record<string, number | string>>> = {};
+  const result: MonthResult = {};
   for (const [cnpj, data] of Object.entries(fundData)) {
     const company = getCompany(cnpj)!;
     const type = fundTypes[cnpj] || "STANDARD";
     if (fundType && fundType !== type) continue;
-
     if (!result[company]) result[company] = {};
-    result[company][cnpj] = {
-      fund_name: fundNames[cnpj] || `Fund ${cnpj}`,
-      fund_type: type,
-      ...data,
-    };
+    result[company][cnpj] = { fund_name: fundNames[cnpj] || `Fund ${cnpj}`, fund_type: type, ...data };
   }
-
   return result;
 }
+
+// ── Main handler ───────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const budgetDeadline = Date.now() + GLOBAL_BUDGET_MS;
 
   try {
     const { months, fundType } = await req.json();
@@ -173,38 +232,78 @@ Deno.serve(async (req) => {
       );
     }
 
-    const results: Record<string, Record<string, Record<string, Record<string, number | string>>>> = {};
+    const ft = fundType || "STANDARD";
+    const results: Record<string, MonthResult> = {};
     const errors: Record<string, string> = {};
+    const meta: Record<string, string> = {};
 
-    // Fetch each month independently — one failure won't block others
-    for (const month of months) {
+    // Process months with controlled parallelism (max 2 concurrent)
+    const processMonth = async (month: string) => {
       if (typeof month !== "string" || month.length !== 6) {
         errors[month] = `Invalid month format: ${month}. Must be YYYYMM`;
+        return;
+      }
+
+      // 1) Try cache first
+      const cached = await readCache(month, ft);
+      if (cached && cached.status === "fresh" && Object.keys(cached.payload).length > 0) {
+        console.log(`[cvm] Cache HIT (fresh) for ${month}/${ft}`);
+        results[month] = cached.payload;
+        meta[month] = "cached";
+        return;
+      }
+
+      // 2) Try live fetch
+      const start = Date.now();
+      try {
+        const data = await fetchMonthData(month, ft, budgetDeadline);
+        const duration = Date.now() - start;
+        results[month] = data;
+        meta[month] = "live";
+        // Write to cache in background (don't block response)
+        writeCache(month, ft, data, duration);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[cvm] Fetch failed for ${month}:`, errMsg);
+
+        // 3) Fallback to stale cache
+        if (cached && Object.keys(cached.payload).length > 0) {
+          console.log(`[cvm] Using stale cache for ${month}/${ft}`);
+          results[month] = cached.payload;
+          meta[month] = "stale";
+        } else {
+          errors[month] = errMsg;
+          writeCacheError(month, ft, errMsg);
+        }
+      }
+    };
+
+    // Run months sequentially to stay within budget
+    for (const month of months) {
+      if (Date.now() >= budgetDeadline - 3000) {
+        errors[month] = `TIMEOUT:${month}:Execution budget exhausted.`;
         continue;
       }
-      try {
-        results[month] = await fetchMonthData(month, fundType);
-      } catch (err) {
-        console.error(`[cvm-statements] Error for ${month}:`, err);
-        errors[month] = err instanceof Error ? err.message : String(err);
-      }
+      await processMonth(month);
     }
 
-    // If we got at least some data, return partial success
     if (Object.keys(results).length > 0) {
       return new Response(
-        JSON.stringify({ ...results, ...(Object.keys(errors).length > 0 ? { _errors: errors } : {}) }),
+        JSON.stringify({
+          ...results,
+          _meta: meta,
+          ...(Object.keys(errors).length > 0 ? { _errors: errors } : {}),
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // All months failed
     return new Response(
       JSON.stringify({ error: "All requested months failed", details: errors }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("[cvm-statements] Error:", err);
+    console.error("[cvm] Error:", err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
