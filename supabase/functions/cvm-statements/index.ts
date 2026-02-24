@@ -57,7 +57,19 @@ async function fetchMonthData(refMonth: string, fundType?: string) {
     : `https://dados.cvm.gov.br/dados/FIDC/DOC/INF_MENSAL/DADOS/inf_mensal_fidc_${refMonth}.zip`;
 
   console.log(`[cvm-statements] Fetching: ${zipUrl}`);
-  const response = await fetch(zipUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 120s timeout
+  let response: Response;
+  try {
+    response = await fetch(zipUrl, { signal: controller.signal });
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(`Timeout fetching CVM data for ${refMonth}. The CVM server may be slow.`);
+    }
+    throw new Error(`Network error fetching CVM data for ${refMonth}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  clearTimeout(timeout);
   if (!response.ok) {
     throw new Error(`Data not available for ${refMonth}. CVM returned ${response.status}`);
   }
