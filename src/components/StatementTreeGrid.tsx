@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
+import { ChevronsUpDown, ChevronsDownUp } from "lucide-react";
 import { ACCOUNT_TREE, flattenTree, getDescendantIds, type FlatAccount } from "@/lib/account-tree";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -15,20 +15,15 @@ interface StatementTreeGridProps {
   loading?: boolean;
 }
 
+const brFmt = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
 function formatBRL(value: number): string {
   if (value === 0) return "—";
-  const abs = Math.abs(value);
-  let formatted: string;
-  if (abs >= 1_000_000_000) {
-    formatted = `${(value / 1_000_000_000).toFixed(2)}B`;
-  } else if (abs >= 1_000_000) {
-    formatted = `${(value / 1_000_000).toFixed(2)}M`;
-  } else if (abs >= 1_000) {
-    formatted = `${(value / 1_000).toFixed(1)}K`;
-  } else {
-    formatted = value.toFixed(2);
-  }
-  return `R$ ${formatted}`;
+  const formatted = brFmt.format(Math.abs(value));
+  return value < 0 ? `-R$ ${formatted}` : `R$ ${formatted}`;
 }
 
 const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProps) => {
@@ -97,15 +92,18 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
-              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] sticky left-0 bg-muted/50 z-10">
-                {t("grid.account")}
+              <th className="text-left py-3 px-3 font-display font-semibold text-foreground min-w-[80px] sticky left-0 bg-muted/50 z-10 border-t-2 border-t-primary">
+                {t("grid.code")}
+              </th>
+              <th className="text-left py-3 px-3 font-display font-semibold text-foreground min-w-[220px] border-t-2 border-t-primary">
+                {t("grid.description")}
               </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px]"
+                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-t-2 border-t-primary"
                 >
-                  {col.label}
+                  {col.label} <span className="text-muted-foreground font-normal text-xs">(R$)</span>
                 </th>
               ))}
             </tr>
@@ -121,42 +119,48 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                   key={account.id}
                   className={`border-b border-border/50 transition-colors ${
                     isTopLevel
-                      ? "bg-muted/30 hover:bg-muted/50"
+                      ? "bg-primary/10 hover:bg-primary/15"
+                      : isParent
+                      ? "bg-primary/5 hover:bg-primary/10"
                       : "hover:bg-muted/20"
                   }`}
                 >
+                  {/* Código */}
                   <td
-                    className={`py-2.5 px-4 sticky left-0 z-10 ${
-                      isTopLevel ? "bg-muted/30" : "bg-background"
+                    className={`py-2.5 px-3 sticky left-0 z-10 font-mono text-muted-foreground ${
+                      isTopLevel ? "bg-primary/10" : isParent ? "bg-primary/5" : "bg-background"
                     }`}
                   >
                     <div
-                      className="flex items-center gap-1.5"
-                      style={{ paddingLeft: `${account.depth * 20}px` }}
+                      className="flex items-center gap-1"
+                      style={{ paddingLeft: `${account.depth * 12}px` }}
                     >
                       {isParent ? (
                         <button
                           onClick={() => toggleExpand(account.id)}
-                          className="p-0.5 rounded hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                          className="text-primary hover:text-primary/80 transition-colors text-xs leading-none mr-0.5"
                         >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
+                          {isExpanded ? "▼" : "▶"}
                         </button>
                       ) : (
-                        <span className="w-5" />
+                        <span className="w-3" />
                       )}
-                      <span
-                        className={`${
-                          isParent ? "font-semibold text-foreground" : "text-muted-foreground"
-                        } ${isTopLevel ? "font-display text-base" : "text-sm"}`}
-                      >
-                        {account.label}
-                      </span>
+                      <span className="text-xs">{account.code}</span>
                     </div>
                   </td>
+
+                  {/* Descrição */}
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`${
+                        isParent ? "font-semibold text-foreground" : "text-muted-foreground"
+                      } ${isTopLevel ? "font-display text-sm" : "text-sm"}`}
+                    >
+                      {account.label}
+                    </span>
+                  </td>
+
+                  {/* Values */}
                   {columns.map((col) => {
                     const value = getValue(col.key, account.id);
                     const isNegative = value < 0;
@@ -164,7 +168,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                     return (
                       <td
                         key={col.key}
-                        className={`py-2.5 px-4 text-right font-mono tabular-nums ${
+                        className={`py-2.5 px-4 text-right font-mono tabular-nums text-sm ${
                           isNegative
                             ? "text-destructive"
                             : isZero
@@ -172,7 +176,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                             : isParent
                             ? "text-foreground font-semibold"
                             : "text-foreground"
-                        } ${isTopLevel ? "text-base" : "text-sm"}`}
+                        }`}
                       >
                         {formatBRL(value)}
                       </td>

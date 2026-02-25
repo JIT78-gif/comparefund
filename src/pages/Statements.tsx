@@ -4,10 +4,11 @@ import Navbar from "@/components/Navbar";
 import StatementTreeGrid from "@/components/StatementTreeGrid";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AlertTriangle, RefreshCw, Info, WifiOff } from "lucide-react";
+import { AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { invokeStatements, classifyError } from "@/lib/cvm-invoke";
 
 const COMPANIES = [
@@ -15,6 +16,7 @@ const COMPANIES = [
   { key: "red", label: "Red" },
   { key: "atena", label: "Atena" },
   { key: "cifra", label: "Cifra" },
+  { key: "omni", label: "Omni" },
 ];
 
 const YEARS = Array.from({ length: 7 }, (_, i) => String(2019 + i));
@@ -80,7 +82,6 @@ const Statements = () => {
   const lastGoodData = useRef<Record<string, Record<string, Record<string, Record<string, number | string>>>> | null>(null);
   const [staleMonths, setStaleMonths] = useState<string[]>([]);
 
-  // Debounced query key
   const [debouncedKey, setDebouncedKey] = useState<{ months: string[]; fundType: string }>({ months: ["202411"], fundType: "STANDARD" });
 
   const months = useMemo(() => {
@@ -90,7 +91,6 @@ const Statements = () => {
     return m;
   }, [mode, year1, month1, year2, month2, year3, month3, usePeriod3]);
 
-  // Debounce: update query key 400ms after last change
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedKey({ months, fundType });
@@ -103,22 +103,17 @@ const Statements = () => {
     queryFn: async () => {
       setStaleMonths([]);
       const result = await invokeStatements(debouncedKey.months, debouncedKey.fundType, 65_000);
-
-      // Check _meta for stale entries
       if (result?._meta) {
         const stale = Object.entries(result._meta as Record<string, string>)
           .filter(([, v]) => v === "stale")
           .map(([k]) => k);
         setStaleMonths(stale);
       }
-
-      // Remove internal keys before storing
       const { _meta, _errors, ...cleaned } = result as Record<string, unknown>;
-
       lastGoodData.current = cleaned as Record<string, Record<string, Record<string, Record<string, number | string>>>>;
       return lastGoodData.current;
     },
-    retry: 0, // retries handled inside invokeStatements
+    retry: 0,
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
@@ -177,54 +172,81 @@ const Statements = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
-        <h1 className="font-display font-extrabold text-xl sm:text-2xl md:text-3xl text-foreground mb-4 sm:mb-6">
+        <h1 className="font-display font-extrabold text-xl sm:text-2xl md:text-3xl text-foreground mb-6">
           {t("statements.title")}
         </h1>
 
-        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          <div className="flex flex-wrap gap-2">
-            <Button variant={mode === "companies" ? "default" : "outline"} size="sm" onClick={() => setMode("companies")} className="text-xs sm:text-sm">
+        {/* Tabs row: mode tabs + Standard/NP toggle */}
+        <div className="flex items-center justify-between border-b border-border mb-5">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setMode("companies")}
+              className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
+                mode === "companies" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
               {t("statements.compareCompanies")}
-            </Button>
-            <Button variant={mode === "periods" ? "default" : "outline"} size="sm" onClick={() => setMode("periods")} className="text-xs sm:text-sm">
+              {mode === "companies" && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setMode("periods")}
+              className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
+                mode === "periods" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
               {t("statements.comparePeriods")}
-            </Button>
-            <div className="flex gap-1 ml-auto">
-              <Button variant={fundType === "STANDARD" ? "default" : "outline"} size="sm" onClick={() => setFundType("STANDARD")} className="text-xs">
-                Standard
-              </Button>
-              <Button variant={fundType === "NP" ? "default" : "outline"} size="sm" onClick={() => setFundType("NP")} className="text-xs">
-                NP
-              </Button>
-            </div>
+              {mode === "periods" && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full" />
+              )}
+            </button>
           </div>
 
-          {mode === "companies" ? (
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-sm text-muted-foreground font-semibold">{t("statements.companies")}</span>
-              {COMPANIES.map((c) => (
-                <label key={c.key} className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={selectedCompanies.includes(c.key)} onCheckedChange={() => toggleCompany(c.key)} />
-                  <span className="text-sm text-foreground">{c.label}</span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground font-semibold">{t("statements.company")}</span>
-              <Select value={singleCompany} onValueChange={setSingleCompany}>
-                <SelectTrigger className="w-[160px] h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {COMPANIES.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex items-center gap-2 pb-3">
+            <span className={`text-xs font-mono ${fundType === "STANDARD" ? "text-foreground" : "text-muted-foreground"}`}>
+              Standard
+            </span>
+            <Switch
+              checked={fundType === "NP"}
+              onCheckedChange={(checked) => setFundType(checked ? "NP" : "STANDARD")}
+            />
+            <span className={`text-xs font-mono ${fundType === "NP" ? "text-foreground" : "text-muted-foreground"}`}>
+              NP
+            </span>
+          </div>
+        </div>
 
-          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
-            <MonthYearPicker label={mode === "companies" ? t("statements.period") : t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
-            {mode === "periods" && (
-              <>
+        {/* Controls row */}
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4 mb-5">
+          {mode === "companies" ? (
+            <>
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-sm text-muted-foreground font-semibold">{t("statements.companies")}</span>
+                {COMPANIES.map((c) => (
+                  <label key={c.key} className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox checked={selectedCompanies.includes(c.key)} onCheckedChange={() => toggleCompany(c.key)} />
+                    <span className="text-sm text-foreground">{c.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="sm:ml-auto">
+                <MonthYearPicker label={t("statements.period")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground font-semibold">{t("statements.company")}</span>
+                <Select value={singleCompany} onValueChange={setSingleCompany}>
+                  <SelectTrigger className="w-[160px] h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {COMPANIES.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <MonthYearPicker label={t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
                 <MonthYearPicker label={t("statements.period2")} year={year2} setYear={setYear2} month={month2} setMonth={setMonth2} monthLabels={monthLabels} />
                 {usePeriod3 && (
                   <MonthYearPicker label={t("statements.period3")} year={year3} setYear={setYear3} month={month3} setMonth={setMonth3} monthLabels={monthLabels} />
@@ -232,9 +254,9 @@ const Statements = () => {
                 <Button variant="ghost" size="sm" onClick={() => setUsePeriod3(!usePeriod3)} className="text-xs text-muted-foreground">
                   {usePeriod3 ? t("statements.removePeriod") : t("statements.addPeriod")}
                 </Button>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
         {staleMonths.length > 0 && !error && (
@@ -255,7 +277,7 @@ const Statements = () => {
               <span>{classifyError(error).message}</span>
               <Button variant="outline" size="sm" onClick={handleRetry} disabled={isFetching} className="w-fit">
                 <RefreshCw className={`h-3 w-3 mr-1 ${isFetching ? "animate-spin" : ""}`} />
-                {t("statements.tryAgain") || "Try again"}
+                {t("statements.tryAgain")}
               </Button>
             </AlertDescription>
           </Alert>
