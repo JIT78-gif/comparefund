@@ -1,52 +1,84 @@
 
 
-## Fix: Add Direct Database Fallback for Statement Data
+## UI Redesign to Match Reference Image + Remove Dashboard
 
-### Root Cause
-The backend function works correctly (confirmed with direct test call returning 200 with data for 202411). The "Failed to fetch" errors occur at the browser transport layer - the request never reaches the function or the response never makes it back. This is an intermittent infrastructure issue, not a code bug.
+### Analysis of Reference Image
 
-### Solution: Direct Database Cache Fallback
-Since we already have a `statement_cache` table with valid cached data, we can read it directly via the database client when the edge function fails. This completely bypasses the edge function transport path for cached months.
+The reference shows a professional dark-themed financial dashboard with:
+- Wider horizontal navbar with multiple links and PT/EN toggle
+- Clean tab-based mode switcher with green underline on active tab
+- Standard/NP as a toggle switch (not buttons)
+- Company checkboxes and period selector on the same row
+- A new company "Omni" added
+- Table with separate "Código" and "Descrição da Conta" columns
+- Green-tinted parent/header rows
+- Values in Brazilian format: "R$ 58.770.640"
+- Negative values in red with minus prefix
+- Green expand/collapse triangles
 
-### Changes
+### Changes Required
 
-**1. Update `src/lib/cvm-invoke.ts`**
-- Add a new `readCacheDirect()` function that queries `statement_cache` table directly using the Supabase client
-- Modify `invokeStatements()` flow:
-  1. Try edge function call (with timeout + 1 retry as today)
-  2. If that fails, try reading directly from `statement_cache` table
-  3. If cache has data, return it with `_meta` marking months as "stale"
-  4. Only throw if both paths fail
-- This direct DB read is fast (milliseconds) and does not go through the edge function proxy
+**1. Remove Dashboard route and update navigation**
+- File: `src/App.tsx` — Remove the Index `/` route, make `/statements` the home route, keep `/compare`
+- File: `src/pages/Index.tsx` — Delete (no longer needed)
+- File: `src/components/Navbar.tsx` — Redesign completely:
+  - Horizontal links: HOME, DEMONSTRAÇÕES, COMPARAR, RELATÓRIOS, CONFIGURAÇÕES
+  - Active link gets green underline (not color change)
+  - HOME points to `/` (which is now statements)
+  - PT / EN text toggle on the right (simpler than globe button)
+  - Wider, more spacious layout
 
-**2. Update `src/pages/Statements.tsx`**
-- Fix the "Try again" button text (currently showing raw translation key `statements.tryAgain`)
-- Keep existing error display and stale data banner logic (already works correctly with `_meta`)
+**2. Redesign Statements page layout**
+- File: `src/pages/Statements.tsx`:
+  - Title "Demonstrações Financeiras" as large heading
+  - Tabs "Comparar Empresas" / "Comparar Períodos" with green underline (not buttons)
+  - Standard/NP toggle switch on the right side of the tabs row
+  - Companies row: "Empresas:" label + checkboxes inline + "Período:" with month/year selectors on the right
+  - Add "Omni" to COMPANIES array
+  - Remove the button-style mode switcher, use tab-style underlined text
 
-### Why This Works
-- The `statement_cache` table already has RLS allowing public reads
-- Reading from the database uses a different network path than edge function invocation
-- Cached data for 202411/STANDARD is already present and valid
-- Users get data immediately even when edge function transport is flaky
-- The stale data banner correctly informs users when they're seeing cached data
+**3. Redesign StatementTreeGrid table**
+- File: `src/components/StatementTreeGrid.tsx`:
+  - Split account column into two: "Código" (account code like "1", "1.1", "1.1.1") and "Descrição da Conta" (description)
+  - Column headers styled with teal/cyan top accent border
+  - Parent rows get green-tinted background (deeper green than current)
+  - Green colored expand/collapse triangles (▶/▼)
+  - Values formatted as full Brazilian style: "R$ 58.770.640" (dots as thousands separator)
+  - Negative values: "-R$ 1.200.000" in red
+  - Column headers show "(R$)" suffix
+
+**4. Update account tree labels**
+- File: `src/lib/account-tree.ts`:
+  - Add code numbers to labels or extract them for the "Código" column
+  - Ensure tree structure matches reference (1 - ATIVO TOTAL, 1.1 - Disponibilidades, etc.)
+
+**5. Update translations**
+- File: `src/contexts/LanguageContext.tsx`:
+  - Add nav keys: "nav.home", "nav.statements" (update), "nav.reports", "nav.settings"
+  - Add grid keys: "grid.code", "grid.description"
+  - Update existing keys as needed
+
+**6. Update CSS/styling**
+- File: `src/index.css`:
+  - Ensure dark theme colors match the reference (dark navy background, green accents)
+  - The current dark theme is close but may need minor tweaks
 
 ### Technical Details
 
-The `readCacheDirect` function will:
+**Number formatting change:**
+Current `formatBRL` abbreviates values (58.77M). Reference shows full values with dot separators (R$ 58.770.640). Will update to use `Intl.NumberFormat('pt-BR')` for authentic Brazilian formatting.
+
+**Account code extraction:**
+The reference shows codes like "1", "1.1", "1.1.1" separately from descriptions. Will derive these from the tree depth/position or add explicit `code` fields to the account tree.
+
+**Routing change:**
 ```text
-1. Query: SELECT parsed_payload, source_status, expires_at 
-   FROM statement_cache 
-   WHERE ref_month = ? AND fund_type = ?
-2. Return the parsed_payload if found (regardless of expiry)
-3. Mark as "stale" if expired, "cached" if fresh
+Before:  / → Index (landing page),  /statements → Statements
+After:   / → Statements (home),     /compare → Compare (unchanged)
 ```
 
-The updated `invokeStatements` flow:
+**New COMPANIES array:**
 ```text
-try edge function (with timeout + retry)
-  -> success: return data
-  -> fail: try readCacheDirect for each month
-    -> any data found: return assembled result with _meta stale markers
-    -> no cache: throw original error
+["multiplica", "red", "atena", "cifra", "omni"]
 ```
 
