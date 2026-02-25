@@ -88,20 +88,20 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
         </Button>
       </div>
 
-      <div className="relative w-full overflow-auto rounded-lg border border-border">
+      <div className="relative w-full overflow-auto rounded-lg border border-primary/30">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/50 border-b border-border">
-              <th className="text-left py-3 px-3 font-display font-semibold text-foreground min-w-[80px] sticky left-0 bg-muted/50 z-10 border-t-2 border-t-primary">
+            <tr className="bg-card border-b-2 border-b-primary/50">
+              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[120px] border-r border-border">
                 {t("grid.code")}
               </th>
-              <th className="text-left py-3 px-3 font-display font-semibold text-foreground min-w-[220px] border-t-2 border-t-primary">
+              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] border-r border-border">
                 {t("grid.description")}
               </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-t-2 border-t-primary"
+                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-r border-border last:border-r-0"
                 >
                   {col.label} <span className="text-muted-foreground font-normal text-xs">(R$)</span>
                 </th>
@@ -117,47 +117,49 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
               return (
                 <tr
                   key={account.id}
-                  className={`border-b border-border/50 transition-colors ${
+                  className={`border-b border-border/40 transition-colors ${
                     isTopLevel
-                      ? "bg-primary/10 hover:bg-primary/15"
+                      ? "bg-primary/15"
                       : isParent
-                      ? "bg-primary/5 hover:bg-primary/10"
-                      : "hover:bg-muted/20"
+                      ? "bg-primary/8"
+                      : "hover:bg-card/50"
                   }`}
                 >
-                  {/* Código */}
-                  <td
-                    className={`py-2.5 px-3 sticky left-0 z-10 font-mono text-muted-foreground ${
-                      isTopLevel ? "bg-primary/10" : isParent ? "bg-primary/5" : "bg-background"
-                    }`}
-                  >
+                  {/* Código column — shows code only for leaf/non-top-level */}
+                  <td className="py-2.5 px-4 font-mono text-muted-foreground text-sm border-r border-border/30">
+                    {!isTopLevel && account.code}
+                  </td>
+
+                  {/* Descrição — shows code prefix + label for parents */}
+                  <td className="py-2.5 px-4 border-r border-border/30">
                     <div
-                      className="flex items-center gap-1"
-                      style={{ paddingLeft: `${account.depth * 12}px` }}
+                      className="flex items-center gap-1.5"
+                      style={{ paddingLeft: `${Math.max(0, account.depth - 1) * 20}px` }}
                     >
-                      {isParent ? (
+                      {isParent && (
                         <button
                           onClick={() => toggleExpand(account.id)}
-                          className="text-primary hover:text-primary/80 transition-colors text-xs leading-none mr-0.5"
+                          className="text-primary hover:text-primary/80 transition-colors text-sm leading-none"
                         >
                           {isExpanded ? "▼" : "▶"}
                         </button>
-                      ) : (
-                        <span className="w-3" />
                       )}
-                      <span className="text-xs">{account.code}</span>
+                      <span
+                        className={`${
+                          isTopLevel
+                            ? "font-display font-bold text-foreground text-[15px]"
+                            : isParent
+                            ? "font-semibold text-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {isTopLevel
+                          ? `${account.code} - ${account.label.toUpperCase()}`
+                          : isParent
+                          ? `${account.code} - ${account.label}`
+                          : `${account.code} - ${account.label}`}
+                      </span>
                     </div>
-                  </td>
-
-                  {/* Descrição */}
-                  <td className="py-2.5 px-3">
-                    <span
-                      className={`${
-                        isParent ? "font-semibold text-foreground" : "text-muted-foreground"
-                      } ${isTopLevel ? "font-display text-sm" : "text-sm"}`}
-                    >
-                      {account.label}
-                    </span>
                   </td>
 
                   {/* Values */}
@@ -168,11 +170,13 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                     return (
                       <td
                         key={col.key}
-                        className={`py-2.5 px-4 text-right font-mono tabular-nums text-sm ${
+                        className={`py-2.5 px-4 text-right font-mono tabular-nums text-sm border-r border-border/30 last:border-r-0 ${
                           isNegative
                             ? "text-destructive"
                             : isZero
-                            ? "text-muted-foreground/50"
+                            ? "text-muted-foreground/40"
+                            : isTopLevel
+                            ? "text-foreground font-bold"
                             : isParent
                             ? "text-foreground font-semibold"
                             : "text-foreground"

@@ -9,8 +9,8 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
-    { path: "/", label: t("nav.home") },
-    { path: "/compare", label: t("nav.compare") },
+    { path: "/", label: "HOME" },
+    { path: "/compare", label: t("nav.compare").toUpperCase() },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -19,8 +19,9 @@ const Navbar = () => {
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border px-4 md:px-[60px]">
         <div className="flex items-center justify-between h-14 max-w-[1400px] mx-auto">
-          <Link to="/" className="font-display font-extrabold text-base tracking-tight text-foreground">
-            FIDC<span className="text-primary">.</span>Intel
+          <Link to="/" className="flex items-center gap-2 font-display font-extrabold text-base tracking-tight text-foreground">
+            <span className="text-primary text-lg">●</span>
+            <span>FIDC<span className="text-primary">.</span>Intel</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
@@ -28,9 +29,9 @@ const Navbar = () => {
               <Link
                 key={l.path}
                 to={l.path}
-                className={`relative py-4 text-[11px] tracking-[3px] uppercase font-mono transition-colors ${
+                className={`relative py-4 text-[12px] tracking-[3px] uppercase font-mono font-semibold transition-colors ${
                   isActive(l.path)
-                    ? "text-foreground"
+                    ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -43,23 +44,20 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center border border-border rounded-sm overflow-hidden">
+            <div className="flex items-center gap-1 text-[12px] font-mono tracking-wider">
               <button
                 onClick={() => setLanguage("pt")}
-                className={`px-2.5 py-1 text-[11px] font-mono font-semibold tracking-wider transition-colors ${
-                  language === "pt"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                className={`transition-colors ${
+                  language === "pt" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 PT
               </button>
+              <span className="text-muted-foreground">/</span>
               <button
                 onClick={() => setLanguage("en")}
-                className={`px-2.5 py-1 text-[11px] font-mono font-semibold tracking-wider transition-colors ${
-                  language === "en"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                className={`transition-colors ${
+                  language === "en" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 EN

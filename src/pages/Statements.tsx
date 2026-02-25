@@ -172,17 +172,17 @@ const Statements = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
-        <h1 className="font-display font-extrabold text-xl sm:text-2xl md:text-3xl text-foreground mb-6">
+        <h1 className="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-foreground mb-8">
           {t("statements.title")}
         </h1>
 
         {/* Tabs row: mode tabs + Standard/NP toggle */}
-        <div className="flex items-center justify-between border-b border-border mb-5">
-          <div className="flex gap-6">
+        <div className="flex items-center justify-between border-b border-border mb-6">
+          <div className="flex gap-8">
             <button
               onClick={() => setMode("companies")}
               className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
-                mode === "companies" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                mode === "companies" ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t("statements.compareCompanies")}
@@ -193,7 +193,7 @@ const Statements = () => {
             <button
               onClick={() => setMode("periods")}
               className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
-                mode === "periods" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                mode === "periods" ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t("statements.comparePeriods")}
@@ -204,21 +204,21 @@ const Statements = () => {
           </div>
 
           <div className="flex items-center gap-2 pb-3">
-            <span className={`text-xs font-mono ${fundType === "STANDARD" ? "text-foreground" : "text-muted-foreground"}`}>
+            <span className={`text-xs font-mono font-semibold ${fundType === "STANDARD" ? "text-primary" : "text-muted-foreground"}`}>
               Standard
             </span>
             <Switch
               checked={fundType === "NP"}
               onCheckedChange={(checked) => setFundType(checked ? "NP" : "STANDARD")}
             />
-            <span className={`text-xs font-mono ${fundType === "NP" ? "text-foreground" : "text-muted-foreground"}`}>
+            <span className={`text-xs font-mono ${fundType === "NP" ? "text-primary" : "text-muted-foreground"}`}>
               NP
             </span>
           </div>
         </div>
 
         {/* Controls row */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4 mb-5">
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4 mb-6">
           {mode === "companies" ? (
             <>
               <div className="flex flex-wrap items-center gap-4">
@@ -226,7 +226,9 @@ const Statements = () => {
                 {COMPANIES.map((c) => (
                   <label key={c.key} className="flex items-center gap-2 cursor-pointer">
                     <Checkbox checked={selectedCompanies.includes(c.key)} onCheckedChange={() => toggleCompany(c.key)} />
-                    <span className="text-sm text-foreground">{c.label}</span>
+                    <span className={`text-sm ${selectedCompanies.includes(c.key) ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                      {c.label}
+                    </span>
                   </label>
                 ))}
               </div>
