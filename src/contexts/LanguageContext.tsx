@@ -6,9 +6,8 @@ type Translations = Record<string, Record<Language, string>>;
 
 const translations: Translations = {
   // Navbar
-  "nav.dashboard": { pt: "Dashboard", en: "Dashboard" },
+  "nav.home": { pt: "Home", en: "Home" },
   "nav.compare": { pt: "Comparar", en: "Compare" },
-  "nav.statements": { pt: "Demonstrações", en: "Statements" },
 
   // Index page
   "index.tag": { pt: "// Blueprint v1.0 — Plataforma de Inteligência FIDC", en: "// Blueprint v1.0 — FIDC Intelligence Platform" },
@@ -79,8 +78,12 @@ const translations: Translations = {
   // StatementTreeGrid
   "grid.expandAll": { pt: "Expandir Tudo", en: "Expand All" },
   "grid.collapseAll": { pt: "Recolher Tudo", en: "Collapse All" },
-  "grid.account": { pt: "Conta", en: "Account" },
+  "grid.code": { pt: "Código", en: "Code" },
+  "grid.description": { pt: "Descrição da Conta", en: "Account Description" },
   "grid.loading": { pt: "Carregando demonstrações...", en: "Loading statements..." },
+
+  // Statements - Try Again
+  "statements.tryAgain": { pt: "Tentar novamente", en: "Try again" },
 
   // NotFound
   "notfound.title": { pt: "Página não encontrada", en: "Oops! Page not found" },
