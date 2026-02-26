@@ -43,6 +43,8 @@ const COMPANIES = [
   { key: "red", label: "Red", color: "bg-accent", chartColor: "hsl(20, 100%, 57%)" },
   { key: "atena", label: "Atena", color: "bg-secondary", chartColor: "hsl(221, 100%, 65%)" },
   { key: "cifra", label: "Cifra", color: "bg-yellow-500", chartColor: "hsl(45, 100%, 50%)" },
+  { key: "omni", label: "Omni", color: "bg-purple-500", chartColor: "hsl(270, 100%, 60%)" },
+  { key: "sifra", label: "Sifra", color: "bg-rose-500", chartColor: "hsl(350, 100%, 60%)" },
 ];
 
 const Compare = () => {

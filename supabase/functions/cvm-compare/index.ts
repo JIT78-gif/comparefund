@@ -6,9 +6,10 @@ const CNPJS: Record<string, string[]> = {
   red: ["17250006000110", "11489344000122"],
   atena: ["31904898000156"],
   cifra: ["08818152000108"],
+  sifra: ["08678936000188", "17012019000150", "41351629000163", "42462120000150", "54889584000127", "14166140000149"],
 };
 
-const NP_OVERRIDE: Set<string> = new Set(["40211675000102"]);
+const NP_OVERRIDE: Set<string> = new Set(["40211675000102", "17012019000150"]);
 
 function cleanCnpj(raw: string): string {
   return raw.replace(/[.\-\/]/g, "");

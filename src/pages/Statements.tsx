@@ -17,6 +17,7 @@ const COMPANIES = [
   { key: "atena", label: "Atena" },
   { key: "cifra", label: "Cifra" },
   { key: "omni", label: "Omni" },
+  { key: "sifra", label: "Sifra" },
 ];
 
 const YEARS = Array.from({ length: 7 }, (_, i) => String(2019 + i));
