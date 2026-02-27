@@ -1,84 +1,61 @@
 
 
-## UI Redesign to Match Reference Image + Remove Dashboard
+## Current State vs Target
 
-### Analysis of Reference Image
+**Current**: 78 accounts (Tabs I, II, III, IV, VII partial)
+**Target**: 471 accounts (all 10 tabs from the CVM FIDC report)
 
-The reference shows a professional dark-themed financial dashboard with:
-- Wider horizontal navbar with multiple links and PT/EN toggle
-- Clean tab-based mode switcher with green underline on active tab
-- Standard/NP as a toggle switch (not buttons)
-- Company checkboxes and period selector on the same row
-- A new company "Omni" added
-- Table with separate "Código" and "Descrição da Conta" columns
-- Green-tinted parent/header rows
-- Values in Brazilian format: "R$ 58.770.640"
-- Negative values in red with minus prefix
-- Green expand/collapse triangles
+**Missing entirely**:
+- Tab V — Comportamento da Carteira c/ Risco (aging buckets: 10 maturity + 10 overdue + 10 prepaid + totals = 34 accounts)
+- Tab VI — Comportamento da Carteira s/ Risco (same structure as Tab V = 34 accounts)
+- Tab IX — Taxas Praticadas (discount rates + interest rates for buy/sell across 6 asset classes = 113 accounts)
+- Tab X — Outras Informações (shareholder counts, unit values, captures, redemptions, amortizations, liquidity, benchmarks, guarantees, SCR ratings = 147 accounts)
 
-### Changes Required
+**Missing sub-accounts in existing tabs**:
+- Tab I: ~25 missing (a.6-a.9 recovery/judicial credits, b.6-b.9, c.1-c.4 debentures/CRI/promissory/LF, c.6 others, g/h/i warrants/provisions, derivatives b-f)
+- Tab II: ~14 missing (c.3 leasing, d.4 entertainment, f.3-f.7 corporate/middle/vehicles/imob, g-i.4 cards/factoring/public sector sub-items)
+- Tab III: ~4 missing (b.2-b.4 options/futures/swaps)
+- Tab VII: ~16 missing (a.4 parcelas inadimplentes, b alienações with b.1-b.3 sub-items, c substituições detail)
 
-**1. Remove Dashboard route and update navigation**
-- File: `src/App.tsx` — Remove the Index `/` route, make `/statements` the home route, keep `/compare`
-- File: `src/pages/Index.tsx` — Delete (no longer needed)
-- File: `src/components/Navbar.tsx` — Redesign completely:
-  - Horizontal links: HOME, DEMONSTRAÇÕES, COMPARAR, RELATÓRIOS, CONFIGURAÇÕES
-  - Active link gets green underline (not color change)
-  - HOME points to `/` (which is now statements)
-  - PT / EN text toggle on the right (simpler than globe button)
-  - Wider, more spacious layout
+## Problem: Unknown Column Names
 
-**2. Redesign Statements page layout**
-- File: `src/pages/Statements.tsx`:
-  - Title "Demonstrações Financeiras" as large heading
-  - Tabs "Comparar Empresas" / "Comparar Períodos" with green underline (not buttons)
-  - Standard/NP toggle switch on the right side of the tabs row
-  - Companies row: "Empresas:" label + checkboxes inline + "Período:" with month/year selectors on the right
-  - Add "Omni" to COMPANIES array
-  - Remove the button-style mode switcher, use tab-style underlined text
+The CVM CSV column names (e.g. `TAB_V_A1_VL_...`) are not documented. We only know the patterns for tabs we already parse. We need to **discover** the actual column headers before we can build the tree.
 
-**3. Redesign StatementTreeGrid table**
-- File: `src/components/StatementTreeGrid.tsx`:
-  - Split account column into two: "Código" (account code like "1", "1.1", "1.1.1") and "Descrição da Conta" (description)
-  - Column headers styled with teal/cyan top accent border
-  - Parent rows get green-tinted background (deeper green than current)
-  - Green colored expand/collapse triangles (▶/▼)
-  - Values formatted as full Brazilian style: "R$ 58.770.640" (dots as thousands separator)
-  - Negative values: "-R$ 1.200.000" in red
-  - Column headers show "(R$)" suffix
+## Plan
 
-**4. Update account tree labels**
-- File: `src/lib/account-tree.ts`:
-  - Add code numbers to labels or extract them for the "Código" column
-  - Ensure tree structure matches reference (1 - ATIVO TOTAL, 1.1 - Disponibilidades, etc.)
+### Step 1: Build a column discovery endpoint
+Add a `discover` mode to the `cvm-statements` edge function that:
+- Downloads one month's ZIP
+- Opens ALL CSV files (not just I-VII)
+- Returns every unique `TAB_*` column name found, grouped by source file
+- This gives us the exact column names for tabs V, VI, IX, X
 
-**5. Update translations**
-- File: `src/contexts/LanguageContext.tsx`:
-  - Add nav keys: "nav.home", "nav.statements" (update), "nav.reports", "nav.settings"
-  - Add grid keys: "grid.code", "grid.description"
-  - Update existing keys as needed
+### Step 2: Run discovery and map columns
+- Call the discovery endpoint for a recent month (e.g. 202501)
+- Map each CVM column name to the PDF's account hierarchy
+- Build the complete 471-account tree
 
-**6. Update CSS/styling**
-- File: `src/index.css`:
-  - Ensure dark theme colors match the reference (dark navy background, green accents)
-  - The current dark theme is close but may need minor tweaks
+### Step 3: Update the edge function to parse all tabs
+- Remove the tab filter so ALL `tab_*.csv` files are processed
+- Keep the existing filter for non-financial columns (CPF/CNPJ/PR_CEDENTE)
+- Add new exclusions for text-based columns that aren't numeric values
 
-### Technical Details
+### Step 4: Rebuild account-tree.ts with all 471 accounts
+- Organized into sections matching the PDF structure
+- Proper hierarchical codes
+- Portuguese labels matching the official CVM terminology
 
-**Number formatting change:**
-Current `formatBRL` abbreviates values (58.77M). Reference shows full values with dot separators (R$ 58.770.640). Will update to use `Intl.NumberFormat('pt-BR')` for authentic Brazilian formatting.
+### Step 5: Update StatementTreeGrid
+- Expand the `QT_COLUMNS` set for Tab X quantity columns (shareholder counts, share quantities)
+- Add rate formatting for Tab IX (percentage columns instead of R$)
+- Consider adding a tab/section filter in the UI since 471 rows is very long
 
-**Account code extraction:**
-The reference shows codes like "1", "1.1", "1.1.1" separately from descriptions. Will derive these from the tree depth/position or add explicit `code` fields to the account tree.
+### Step 6: Clear cache and redeploy
+- Clear statement_cache to force re-ingestion with new columns
+- Deploy updated edge function
 
-**Routing change:**
-```text
-Before:  / → Index (landing page),  /statements → Statements
-After:   / → Statements (home),     /compare → Compare (unchanged)
-```
-
-**New COMPANIES array:**
-```text
-["multiplica", "red", "atena", "cifra", "omni"]
-```
+## Technical Considerations
+- The cached payload size will grow significantly (~6x more columns per fund)
+- Tab X data is per-subclass (senior/subordinated/mezzanine), which may require different handling since the CSV structure could use different row groupings
+- Tab IX values are percentages (rates), not currency — need a third format type beyond R$ and quantity
 
