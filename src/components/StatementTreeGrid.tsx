@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import { ChevronsUpDown, ChevronsDownUp } from "lucide-react";
-import { ACCOUNT_TREE, flattenTree, getDescendantIds, type FlatAccount } from "@/lib/account-tree";
+import { ChevronsUpDown, ChevronsDownUp, Filter } from "lucide-react";
+import { ACCOUNT_TREE, TAB_LABELS, flattenTree, getDescendantIds, isRateColumn, isQuantityColumn, type FlatAccount } from "@/lib/account-tree";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ColumnDef {
@@ -20,32 +21,32 @@ const brFmt = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-function formatBRL(value: number, isQty = false): string {
+function formatValue(value: number, accountId: string): string {
   if (value === 0) return "—";
-  if (isQty) return brFmt.format(value);
+  if (isRateColumn(accountId)) return `${value.toFixed(2)}%`;
+  if (isQuantityColumn(accountId)) return brFmt.format(value);
   const formatted = brFmt.format(Math.abs(value));
   return value < 0 ? `-R$ ${formatted}` : `R$ ${formatted}`;
 }
 
-// Tab VII quantity columns (show as plain numbers, not R$)
-const QT_COLUMNS = new Set([
-  "TAB_VII_A1_1_QT_DIRCRED_RISCO", "TAB_VII_A2_1_QT_DIRCRED_SEM_RISCO",
-  "TAB_VII_A3_1_QT_DIRCRED_VENC_AD", "TAB_VII_A5_1_QT_DIRCRED_INAD",
-  "TAB_VII_B2_1_QT_PREST", "TAB_VII_B3_1_QT_TERCEIRO",
-  "TAB_VII_D_1_QT_RECOMPRA",
-]);
-
 const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProps) => {
   const { t } = useLanguage();
-  const flatAccounts = useMemo(() => flattenTree(ACCOUNT_TREE), []);
+  const [tabFilter, setTabFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  const filteredTree = useMemo(() => {
+    if (tabFilter === "all") return ACCOUNT_TREE;
+    return ACCOUNT_TREE.filter((node) => node.code === tabFilter);
+  }, [tabFilter]);
+
+  const flatAccounts = useMemo(() => flattenTree(filteredTree), [filteredTree]);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-        const descendants = getDescendantIds(ACCOUNT_TREE, id);
+        const descendants = getDescendantIds(filteredTree, id);
         for (const d of descendants) next.delete(d);
       } else {
         next.add(id);
@@ -88,13 +89,27 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1.5">
           <ChevronsUpDown className="h-3.5 w-3.5" /> {t("grid.expandAll")}
         </Button>
         <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1.5">
           <ChevronsDownUp className="h-3.5 w-3.5" /> {t("grid.collapseAll")}
         </Button>
+        <div className="flex items-center gap-1.5 ml-auto">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+          <Select value={tabFilter} onValueChange={setTabFilter}>
+            <SelectTrigger className="w-[260px] h-8 text-xs">
+              <SelectValue placeholder="Todas as Tabs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as Tabs</SelectItem>
+              {TAB_LABELS.map((tab) => (
+                <SelectItem key={tab.code} value={tab.code}>{tab.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="relative w-full overflow-auto rounded-lg border border-primary/30">
@@ -112,7 +127,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                   key={col.key}
                   className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-r border-border last:border-r-0"
                 >
-                  {col.label} <span className="text-muted-foreground font-normal text-xs">(R$)</span>
+                  {col.label}
                 </th>
               ))}
             </tr>
@@ -134,12 +149,10 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                       : "hover:bg-card/50"
                   }`}
                 >
-                  {/* Código column — shows code only for leaf/non-top-level */}
                   <td className="py-2.5 px-4 font-mono text-muted-foreground text-sm border-r border-border/30">
                     {!isTopLevel && account.code}
                   </td>
 
-                  {/* Descrição — shows code prefix + label for parents */}
                   <td className="py-2.5 px-4 border-r border-border/30">
                     <div
                       className="flex items-center gap-1.5"
@@ -164,20 +177,16 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                       >
                         {isTopLevel
                           ? `${account.code} - ${account.label.toUpperCase()}`
-                          : isParent
-                          ? `${account.code} - ${account.label}`
                           : `${account.code} - ${account.label}`}
                       </span>
                     </div>
                   </td>
 
-                  {/* Values */}
                   {columns.map((col) => {
                     const isVirtual = account.id.startsWith("_");
                     const value = isVirtual ? 0 : getValue(col.key, account.id);
                     const isNegative = value < 0;
                     const isZero = value === 0;
-                    const isQty = QT_COLUMNS.has(account.id);
                     return (
                       <td
                         key={col.key}
@@ -193,7 +202,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                             : "text-foreground"
                         }`}
                       >
-                        {formatBRL(value, isQty)}
+                        {formatValue(value, account.id)}
                       </td>
                     );
                   })}

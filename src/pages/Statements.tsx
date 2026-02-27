@@ -146,23 +146,22 @@ const Statements = () => {
   const getValue = useCallback(
     (colKey: string, accountId: string): number => {
       if (!displayData) return 0;
-      if (mode === "companies") {
-        const month = debouncedKey.months[0];
-        const companyData = displayData[month]?.[colKey];
-        if (!companyData) return 0;
-        let total = 0;
+      const isRate = accountId.startsWith("TAB_IX_") || accountId === "TAB_X_PR_GARANTIA_DIRCRED";
+      const aggregate = (companyData: Record<string, Record<string, number | string>>) => {
+        let sum = 0, count = 0;
         for (const cnpjData of Object.values(companyData)) {
-          total += (typeof cnpjData[accountId] === "number" ? cnpjData[accountId] : 0) as number;
+          const v = typeof cnpjData[accountId] === "number" ? cnpjData[accountId] as number : 0;
+          if (isRate) { if (v !== 0) { sum += v; count++; } }
+          else { sum += v; }
         }
-        return total;
+        return isRate && count > 0 ? sum / count : sum;
+      };
+      if (mode === "companies") {
+        const companyData = displayData[debouncedKey.months[0]]?.[colKey];
+        return companyData ? aggregate(companyData) : 0;
       }
       const companyData = displayData[colKey]?.[singleCompany];
-      if (!companyData) return 0;
-      let total = 0;
-      for (const cnpjData of Object.values(companyData)) {
-        total += (typeof cnpjData[accountId] === "number" ? cnpjData[accountId] : 0) as number;
-      }
-      return total;
+      return companyData ? aggregate(companyData) : 0;
     },
     [displayData, mode, debouncedKey.months, singleCompany]
   );
