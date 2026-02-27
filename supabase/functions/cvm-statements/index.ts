@@ -178,7 +178,11 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
 
     const tabColumns: { name: string; idx: number }[] = [];
     for (let i = 0; i < header.length; i++) {
-      if (header[i].startsWith("TAB_")) tabColumns.push({ name: header[i], idx: i });
+      const h = header[i];
+      // Skip non-financial identifier columns (CPF/CNPJ of cedents, percentage of cedents)
+      if (h.startsWith("TAB_") && !h.includes("CPF_CNPJ_CEDENTE") && !h.includes("PR_CEDENTE")) {
+        tabColumns.push({ name: h, idx: i });
+      }
     }
 
     const nameIdx = header.indexOf("DENOM_SOCIAL");

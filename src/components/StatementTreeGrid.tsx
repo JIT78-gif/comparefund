@@ -20,11 +20,20 @@ const brFmt = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-function formatBRL(value: number): string {
+function formatBRL(value: number, isQty = false): string {
   if (value === 0) return "—";
+  if (isQty) return brFmt.format(value);
   const formatted = brFmt.format(Math.abs(value));
   return value < 0 ? `-R$ ${formatted}` : `R$ ${formatted}`;
 }
+
+// Tab VII quantity columns (show as plain numbers, not R$)
+const QT_COLUMNS = new Set([
+  "TAB_VII_A1_1_QT_DIRCRED_RISCO", "TAB_VII_A2_1_QT_DIRCRED_SEM_RISCO",
+  "TAB_VII_A3_1_QT_DIRCRED_VENC_AD", "TAB_VII_A5_1_QT_DIRCRED_INAD",
+  "TAB_VII_B2_1_QT_PREST", "TAB_VII_B3_1_QT_TERCEIRO",
+  "TAB_VII_D_1_QT_RECOMPRA",
+]);
 
 const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProps) => {
   const { t } = useLanguage();
@@ -164,9 +173,11 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
 
                   {/* Values */}
                   {columns.map((col) => {
-                    const value = getValue(col.key, account.id);
+                    const isVirtual = account.id.startsWith("_");
+                    const value = isVirtual ? 0 : getValue(col.key, account.id);
                     const isNegative = value < 0;
                     const isZero = value === 0;
+                    const isQty = QT_COLUMNS.has(account.id);
                     return (
                       <td
                         key={col.key}
@@ -182,7 +193,7 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                             : "text-foreground"
                         }`}
                       >
-                        {formatBRL(value)}
+                        {formatBRL(value, isQty)}
                       </td>
                     );
                   })}
