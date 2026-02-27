@@ -159,18 +159,16 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
   const fundData: Record<string, Record<string, number>> = {};
   const fundNames: Record<string, string> = {};
   const fundTypes: Record<string, string> = {};
-  const targetTables = ["tab_I", "tab_III", "tab_IV"];
-
   for (const [filename, file] of Object.entries(zip.files)) {
     if (file.dir || !filename.endsWith(".csv")) continue;
-    const isTarget = targetTables.some((t) => filename.includes(`_${t}_`) || filename.endsWith(`_${t}.csv`));
-    if (!isTarget) continue;
 
     const isTabI = (filename.includes("tab_I_") || filename.endsWith("tab_I.csv")) &&
-                   !filename.includes("tab_II") && !filename.includes("tab_IV") && !filename.includes("tab_III");
+                   !filename.includes("tab_II") && !filename.includes("tab_IV") && !filename.includes("tab_III") && !filename.includes("tab_IX");
+    const isTabII = filename.includes("tab_II") && !filename.includes("tab_III");
     const isTabIII = filename.includes("tab_III");
     const isTabIV = filename.includes("tab_IV");
-    if (!isTabI && !isTabIII && !isTabIV) continue;
+    const isTabVII = filename.includes("tab_VII");
+    if (!isTabI && !isTabII && !isTabIII && !isTabIV && !isTabVII) continue;
 
     const { header, rows } = await parseCsvFile(file);
     if (!header.length) continue;
