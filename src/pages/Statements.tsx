@@ -15,8 +15,6 @@ const COMPANIES = [
   { key: "multiplica", label: "Multiplica" },
   { key: "red", label: "Red" },
   { key: "atena", label: "Atena" },
-  { key: "cifra", label: "Cifra" },
-  { key: "omni", label: "Omni" },
   { key: "sifra", label: "Sifra" },
 ];
 
