@@ -162,28 +162,26 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
   for (const [filename, file] of Object.entries(zip.files)) {
     if (file.dir || !filename.endsWith(".csv")) continue;
 
-    const isTabI = (filename.includes("tab_I_") || filename.endsWith("tab_I.csv")) &&
-                   !filename.includes("tab_II") && !filename.includes("tab_IV") && !filename.includes("tab_III") && !filename.includes("tab_IX");
-    const isTabII = filename.includes("tab_II") && !filename.includes("tab_III");
-    const isTabIII = filename.includes("tab_III");
-    const isTabIV = filename.includes("tab_IV");
-    const isTabVII = filename.includes("tab_VII");
-    if (!isTabI && !isTabII && !isTabIII && !isTabIV && !isTabVII) continue;
-
     const { header, rows } = await parseCsvFile(file);
     if (!header.length) continue;
 
     const cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
     if (cnpjIdx === -1) continue;
 
+    // Skip per-subclass Tab X files (data per senior/subordinado/mezanino)
+    if (header.includes("TAB_X_CLASSE_SERIE") || header.includes("TAB_X_TP_OPER")) continue;
+
+    // Detect Tab I files for fund type classification
+    const isTabI = /tab_I[_.]/.test(filename) && !/tab_I[IVX]/.test(filename);
+
     const tabColumns: { name: string; idx: number }[] = [];
     for (let i = 0; i < header.length; i++) {
       const h = header[i];
-      // Skip non-financial identifier columns (CPF/CNPJ of cedents, percentage of cedents)
       if (h.startsWith("TAB_") && !h.includes("CPF_CNPJ_CEDENTE") && !h.includes("PR_CEDENTE")) {
         tabColumns.push({ name: h, idx: i });
       }
     }
+    if (tabColumns.length === 0) continue;
 
     const nameIdx = header.indexOf("DENOM_SOCIAL");
     const tpFundoIdx = header.indexOf("TP_FUNDO") !== -1 ? header.indexOf("TP_FUNDO") : header.indexOf("TP_FUNDO_CLASSE");
