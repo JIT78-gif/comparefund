@@ -1,42 +1,22 @@
 
 
-## Feature: Account Selection + Chart Generation
+## Problem
 
-### What the user wants
-1. Each account row in the tree grid gets a **checkbox** to select/deselect it
-2. Selected accounts appear in a **chart panel** below (or beside) the grid
-3. User can choose the **chart type** (bar, line, pie, area)
+The current chart always puts **columns (companies)** on the X-axis and creates one series per **selected account**. This works for bar charts but makes no sense for line charts -- connecting categorical company names with a line is meaningless (as shown in the screenshot: a single curved line from Multiplica to Red to Sifra).
 
-### Implementation
+## Fix: Transpose data for Line and Area charts
 
-**1. Add selection state to StatementTreeGrid**
-- Add a `Set<string>` state for selected account IDs
-- Render a small checkbox (or toggle icon) on each **leaf** row (non-virtual accounts only)
-- Add a "Clear selection" button in the toolbar
-- Show a badge with the count of selected accounts
+For **line** and **area** charts, swap the axes:
+- **X-axis** = selected accounts (e.g., "1.1 - Disponibilidades", "1.2 - Carteira")
+- **One line/area per column** (one per company in "Compare Companies" mode, one per period in "Compare Periods" mode)
+- Each company gets its own colored line, making it easy to compare across accounts
 
-**2. Create a `ChartPanel` component** (`src/components/ChartPanel.tsx`)
-- Receives: selected account IDs, columns, getValue function
-- Chart type selector (dropdown or toggle group): Bar, Line, Area, Pie
-- Uses the existing `recharts` library (already installed) with the shadcn `ChartContainer`
-- For Bar/Line/Area: X-axis = columns (companies or periods), one series per selected account
-- For Pie: shows distribution of selected accounts for a single column
-- Color assignment: use a palette mapped to each selected account
-- Shows account labels in the legend
+For **bar** charts, keep the current layout (companies on X-axis, grouped bars per account) since grouped bars work well with categorical data.
 
-**3. Wire it into the Statements page**
-- Lift `selectedAccounts` state up to `Statements.tsx` and pass it down to both `StatementTreeGrid` and `ChartPanel`
-- Render `ChartPanel` below the grid, only visible when at least 1 account is selected
-- Pass the same `columns` and `getValue` props to the chart
+### Changes in `src/components/ChartPanel.tsx`
 
-**4. UX details**
-- Checkbox appears to the left of the account label in each row
-- Maximum selection limit of ~10 accounts to keep charts readable (show toast if exceeded)
-- A floating "View Chart" button appears when accounts are selected, scrolling down to the chart
-- Chart is responsive and uses the existing theme colors
-
-### Files to create/modify
-- **Create**: `src/components/ChartPanel.tsx` — chart rendering with type selector
-- **Modify**: `src/components/StatementTreeGrid.tsx` — add checkboxes and selection callback
-- **Modify**: `src/pages/Statements.tsx` — manage selection state, render ChartPanel
+1. Add a **transposed dataset** (`chartDataTransposed`) where each row is an account and each series key is a column (company/period)
+2. In `renderCartesian`, use the transposed data when `chartType` is `"line"` or `"area"`
+3. Update the Legend formatter and Tooltip to show column labels (company names) instead of account IDs when transposed
+4. Update the Y-axis `tickFormatter` accordingly
 
