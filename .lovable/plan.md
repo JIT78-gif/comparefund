@@ -1,61 +1,42 @@
 
 
-## Current State vs Target
+## Feature: Account Selection + Chart Generation
 
-**Current**: 78 accounts (Tabs I, II, III, IV, VII partial)
-**Target**: 471 accounts (all 10 tabs from the CVM FIDC report)
+### What the user wants
+1. Each account row in the tree grid gets a **checkbox** to select/deselect it
+2. Selected accounts appear in a **chart panel** below (or beside) the grid
+3. User can choose the **chart type** (bar, line, pie, area)
 
-**Missing entirely**:
-- Tab V — Comportamento da Carteira c/ Risco (aging buckets: 10 maturity + 10 overdue + 10 prepaid + totals = 34 accounts)
-- Tab VI — Comportamento da Carteira s/ Risco (same structure as Tab V = 34 accounts)
-- Tab IX — Taxas Praticadas (discount rates + interest rates for buy/sell across 6 asset classes = 113 accounts)
-- Tab X — Outras Informações (shareholder counts, unit values, captures, redemptions, amortizations, liquidity, benchmarks, guarantees, SCR ratings = 147 accounts)
+### Implementation
 
-**Missing sub-accounts in existing tabs**:
-- Tab I: ~25 missing (a.6-a.9 recovery/judicial credits, b.6-b.9, c.1-c.4 debentures/CRI/promissory/LF, c.6 others, g/h/i warrants/provisions, derivatives b-f)
-- Tab II: ~14 missing (c.3 leasing, d.4 entertainment, f.3-f.7 corporate/middle/vehicles/imob, g-i.4 cards/factoring/public sector sub-items)
-- Tab III: ~4 missing (b.2-b.4 options/futures/swaps)
-- Tab VII: ~16 missing (a.4 parcelas inadimplentes, b alienações with b.1-b.3 sub-items, c substituições detail)
+**1. Add selection state to StatementTreeGrid**
+- Add a `Set<string>` state for selected account IDs
+- Render a small checkbox (or toggle icon) on each **leaf** row (non-virtual accounts only)
+- Add a "Clear selection" button in the toolbar
+- Show a badge with the count of selected accounts
 
-## Problem: Unknown Column Names
+**2. Create a `ChartPanel` component** (`src/components/ChartPanel.tsx`)
+- Receives: selected account IDs, columns, getValue function
+- Chart type selector (dropdown or toggle group): Bar, Line, Area, Pie
+- Uses the existing `recharts` library (already installed) with the shadcn `ChartContainer`
+- For Bar/Line/Area: X-axis = columns (companies or periods), one series per selected account
+- For Pie: shows distribution of selected accounts for a single column
+- Color assignment: use a palette mapped to each selected account
+- Shows account labels in the legend
 
-The CVM CSV column names (e.g. `TAB_V_A1_VL_...`) are not documented. We only know the patterns for tabs we already parse. We need to **discover** the actual column headers before we can build the tree.
+**3. Wire it into the Statements page**
+- Lift `selectedAccounts` state up to `Statements.tsx` and pass it down to both `StatementTreeGrid` and `ChartPanel`
+- Render `ChartPanel` below the grid, only visible when at least 1 account is selected
+- Pass the same `columns` and `getValue` props to the chart
 
-## Plan
+**4. UX details**
+- Checkbox appears to the left of the account label in each row
+- Maximum selection limit of ~10 accounts to keep charts readable (show toast if exceeded)
+- A floating "View Chart" button appears when accounts are selected, scrolling down to the chart
+- Chart is responsive and uses the existing theme colors
 
-### Step 1: Build a column discovery endpoint
-Add a `discover` mode to the `cvm-statements` edge function that:
-- Downloads one month's ZIP
-- Opens ALL CSV files (not just I-VII)
-- Returns every unique `TAB_*` column name found, grouped by source file
-- This gives us the exact column names for tabs V, VI, IX, X
-
-### Step 2: Run discovery and map columns
-- Call the discovery endpoint for a recent month (e.g. 202501)
-- Map each CVM column name to the PDF's account hierarchy
-- Build the complete 471-account tree
-
-### Step 3: Update the edge function to parse all tabs
-- Remove the tab filter so ALL `tab_*.csv` files are processed
-- Keep the existing filter for non-financial columns (CPF/CNPJ/PR_CEDENTE)
-- Add new exclusions for text-based columns that aren't numeric values
-
-### Step 4: Rebuild account-tree.ts with all 471 accounts
-- Organized into sections matching the PDF structure
-- Proper hierarchical codes
-- Portuguese labels matching the official CVM terminology
-
-### Step 5: Update StatementTreeGrid
-- Expand the `QT_COLUMNS` set for Tab X quantity columns (shareholder counts, share quantities)
-- Add rate formatting for Tab IX (percentage columns instead of R$)
-- Consider adding a tab/section filter in the UI since 471 rows is very long
-
-### Step 6: Clear cache and redeploy
-- Clear statement_cache to force re-ingestion with new columns
-- Deploy updated edge function
-
-## Technical Considerations
-- The cached payload size will grow significantly (~6x more columns per fund)
-- Tab X data is per-subclass (senior/subordinated/mezzanine), which may require different handling since the CSV structure could use different row groupings
-- Tab IX values are percentages (rates), not currency — need a third format type beyond R$ and quantity
+### Files to create/modify
+- **Create**: `src/components/ChartPanel.tsx` — chart rendering with type selector
+- **Modify**: `src/components/StatementTreeGrid.tsx` — add checkboxes and selection callback
+- **Modify**: `src/pages/Statements.tsx` — manage selection state, render ChartPanel
 
