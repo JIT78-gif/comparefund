@@ -64,7 +64,7 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
 
   const accountIds = useMemo(() => Array.from(selectedAccounts), [selectedAccounts]);
 
-  // Data for bar/line/area: one row per column, one key per account
+  // Data for bar: one row per column, one key per account
   const chartData = useMemo(() => {
     return columns.map((col) => {
       const row: Record<string, unknown> = { name: col.label };
@@ -74,6 +74,23 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
       return row;
     });
   }, [columns, accountIds, getValue]);
+
+  // Transposed data for line/area: one row per account, one series per column
+  const chartDataTransposed = useMemo(() => {
+    return accountIds.map((accId) => {
+      const row: Record<string, unknown> = { name: labelMap.get(accId) || accId };
+      for (const col of columns) {
+        row[col.key] = getValue(col.key, accId);
+      }
+      return row;
+    });
+  }, [accountIds, columns, getValue, labelMap]);
+
+  const colLabelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const col of columns) m.set(col.key, col.label);
+    return m;
+  }, [columns]);
 
   // Data for pie: sum across columns for each account
   const pieData = useMemo(() => {
@@ -86,39 +103,46 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
 
   if (selectedAccounts.size === 0) return null;
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label, labelMapOverride }: any) => {
     if (!active || !payload?.length) return null;
+    const lm: Map<string, string> = labelMapOverride || labelMap;
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
         <p className="font-display font-semibold text-foreground mb-1">{label}</p>
         {payload.map((entry: any, i: number) => (
           <p key={i} className="text-muted-foreground" style={{ color: entry.color }}>
-            {labelMap.get(entry.dataKey) || entry.dataKey}: {formatTooltipValue(entry.value, entry.dataKey)}
+            {lm.get(entry.dataKey) || entry.dataKey}: {formatTooltipValue(entry.value, entry.dataKey)}
           </p>
         ))}
       </div>
     );
   };
 
+  const isTransposed = chartType === "line" || chartType === "area";
+
   const renderCartesian = () => {
     const ChartComp = chartType === "line" ? LineChart : chartType === "area" ? AreaChart : BarChart;
+    const data = isTransposed ? chartDataTransposed : chartData;
+    const seriesKeys = isTransposed ? columns.map(c => c.key) : accountIds;
+    const seriesLabelMap = isTransposed ? colLabelMap : labelMap;
+
     return (
       <ResponsiveContainer width="100%" height={400}>
-        <ChartComp data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+        <ChartComp data={data} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatTick(v)} width={80} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip labelMapOverride={seriesLabelMap} />} />
           <Legend
             formatter={(value: string) => (
-              <span className="text-xs text-foreground">{labelMap.get(value) || value}</span>
+              <span className="text-xs text-foreground">{seriesLabelMap.get(value) || value}</span>
             )}
           />
-          {accountIds.map((accId, i) => {
+          {seriesKeys.map((key, i) => {
             const color = PALETTE[i % PALETTE.length];
-            if (chartType === "line") return <Line key={accId} type="monotone" dataKey={accId} stroke={color} strokeWidth={2} dot={{ r: 4 }} />;
-            if (chartType === "area") return <Area key={accId} type="monotone" dataKey={accId} stroke={color} fill={color} fillOpacity={0.2} />;
-            return <Bar key={accId} dataKey={accId} fill={color} radius={[4, 4, 0, 0]} />;
+            if (chartType === "line") return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 4 }} />;
+            if (chartType === "area") return <Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.2} />;
+            return <Bar key={key} dataKey={key} fill={color} radius={[4, 4, 0, 0]} />;
           })}
         </ChartComp>
       </ResponsiveContainer>
