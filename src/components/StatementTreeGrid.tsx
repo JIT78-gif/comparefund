@@ -1,9 +1,12 @@
 import { useState, useMemo } from "react";
-import { ChevronsUpDown, ChevronsDownUp, Filter } from "lucide-react";
+import { ChevronsUpDown, ChevronsDownUp, Filter, X } from "lucide-react";
 import { ACCOUNT_TREE, TAB_LABELS, flattenTree, getDescendantIds, isRateColumn, isQuantityColumn, type FlatAccount } from "@/lib/account-tree";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { toast } from "@/hooks/use-toast";
 
 interface ColumnDef {
   key: string;
@@ -14,6 +17,9 @@ interface StatementTreeGridProps {
   columns: ColumnDef[];
   getValue: (colKey: string, accountId: string) => number;
   loading?: boolean;
+  selectedAccounts: Set<string>;
+  onToggleAccount: (id: string) => void;
+  onClearSelection: () => void;
 }
 
 const brFmt = new Intl.NumberFormat("pt-BR", {
@@ -29,7 +35,9 @@ function formatValue(value: number, accountId: string): string {
   return value < 0 ? `-R$ ${formatted}` : `R$ ${formatted}`;
 }
 
-const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProps) => {
+const MAX_SELECTION = 10;
+
+const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onToggleAccount, onClearSelection }: StatementTreeGridProps) => {
   const { t } = useLanguage();
   const [tabFilter, setTabFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -96,6 +104,12 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
         <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1.5">
           <ChevronsDownUp className="h-3.5 w-3.5" /> {t("grid.collapseAll")}
         </Button>
+        {selectedAccounts.size > 0 && (
+          <Button variant="ghost" size="sm" onClick={onClearSelection} className="text-xs gap-1.5 text-destructive">
+            <X className="h-3.5 w-3.5" /> Limpar seleção
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{selectedAccounts.size}</Badge>
+          </Button>
+        )}
         <div className="flex items-center gap-1.5 ml-auto">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <Select value={tabFilter} onValueChange={setTabFilter}>
@@ -158,6 +172,19 @@ const StatementTreeGrid = ({ columns, getValue, loading }: StatementTreeGridProp
                       className="flex items-center gap-1.5"
                       style={{ paddingLeft: `${Math.max(0, account.depth - 1) * 20}px` }}
                     >
+                      {!isTopLevel && !account.id.startsWith("_") && (
+                        <Checkbox
+                          checked={selectedAccounts.has(account.id)}
+                          onCheckedChange={() => {
+                            if (!selectedAccounts.has(account.id) && selectedAccounts.size >= MAX_SELECTION) {
+                              toast({ title: "Limite atingido", description: `Máximo de ${MAX_SELECTION} contas selecionadas.`, variant: "destructive" });
+                              return;
+                            }
+                            onToggleAccount(account.id);
+                          }}
+                          className="h-3.5 w-3.5 shrink-0"
+                        />
+                      )}
                       {isParent && (
                         <button
                           onClick={() => toggleExpand(account.id)}

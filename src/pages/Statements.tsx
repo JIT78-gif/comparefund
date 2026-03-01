@@ -2,13 +2,14 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StatementTreeGrid from "@/components/StatementTreeGrid";
+import ChartPanel from "@/components/ChartPanel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AlertTriangle, RefreshCw, Info } from "lucide-react";
+import { AlertTriangle, RefreshCw, Info, BarChart3 } from "lucide-react";
 import { invokeStatements, classifyError } from "@/lib/cvm-invoke";
 
 const COMPANIES = [
@@ -75,7 +76,8 @@ const Statements = () => {
   const [year3, setYear3] = useState("2024");
   const [month3, setMonth3] = useState("09");
   const [usePeriod3, setUsePeriod3] = useState(false);
-
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
+  const chartRef = useRef<HTMLDivElement>(null);
   const monthLabels = MONTH_KEYS.map((k) => t(k));
 
   const lastGoodData = useRef<Record<string, Record<string, Record<string, Record<string, number | string>>>> | null>(null);
@@ -283,7 +285,33 @@ const Statements = () => {
           </Alert>
         )}
 
-        <StatementTreeGrid columns={columns} getValue={getValue} loading={isLoading} />
+        <StatementTreeGrid
+          columns={columns}
+          getValue={getValue}
+          loading={isLoading}
+          selectedAccounts={selectedAccounts}
+          onToggleAccount={(id) => setSelectedAccounts((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+          })}
+          onClearSelection={() => setSelectedAccounts(new Set())}
+        />
+
+        {selectedAccounts.size > 0 && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <Button
+              onClick={() => chartRef.current?.scrollIntoView({ behavior: "smooth" })}
+              className="gap-2 shadow-lg"
+            >
+              <BarChart3 className="h-4 w-4" /> Ver Gráfico ({selectedAccounts.size})
+            </Button>
+          </div>
+        )}
+
+        <div ref={chartRef}>
+          <ChartPanel selectedAccounts={selectedAccounts} columns={columns} getValue={getValue} />
+        </div>
       </main>
     </div>
   );
