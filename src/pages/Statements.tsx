@@ -19,7 +19,7 @@ const COMPANIES = [
   { key: "sifra", label: "Sifra" },
 ];
 
-const YEARS = Array.from({ length: 7 }, (_, i) => String(2019 + i));
+const YEARS = Array.from({ length: 8 }, (_, i) => String(2019 + i));
 
 const MONTH_KEYS = [
   "month.jan", "month.feb", "month.mar", "month.apr", "month.may", "month.jun",
