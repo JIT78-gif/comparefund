@@ -87,7 +87,7 @@ const Compare = () => {
     staleTime: 1000 * 60 * 30,
   });
 
-  const years = Array.from({ length: 17 }, (_, i) => 2010 + i);
+  const years = Array.from({ length: 18 }, (_, i) => 2010 + i);
 
   const chartData = data
     ? COMPANIES.map((c) => {
