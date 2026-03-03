@@ -1,22 +1,38 @@
 
 
-## Problem
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-The current chart always puts **columns (companies)** on the X-axis and creates one series per **selected account**. This works for bar charts but makes no sense for line charts -- connecting categorical company names with a line is meaningless (as shown in the screenshot: a single curved line from Multiplica to Red to Sifra).
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
-## Fix: Transpose data for Line and Area charts
+```typescript
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
+```
 
-For **line** and **area** charts, swap the axes:
-- **X-axis** = selected accounts (e.g., "1.1 - Disponibilidades", "1.2 - Carteira")
-- **One line/area per column** (one per company in "Compare Companies" mode, one per period in "Compare Periods" mode)
-- Each company gets its own colored line, making it easy to compare across accounts
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-For **bar** charts, keep the current layout (companies on X-axis, grouped bars per account) since grouped bars work well with categorical data.
+### Changes
 
-### Changes in `src/components/ChartPanel.tsx`
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-1. Add a **transposed dataset** (`chartDataTransposed`) where each row is an account and each series key is a column (company/period)
-2. In `renderCartesian`, use the transposed data when `chartType` is `"line"` or `"area"`
-3. Update the Legend formatter and Tooltip to show column labels (company names) instead of account IDs when transposed
-4. Update the Y-axis `tickFormatter` accordingly
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
+
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
+
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
+
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 
