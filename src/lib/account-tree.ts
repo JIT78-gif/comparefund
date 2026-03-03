@@ -443,6 +443,43 @@ function collectChildIds(nodes: AccountNode[]): string[] {
   return ids;
 }
 
+/** Get the direct (non-virtual) leaf IDs under a given node, recursively. */
+export function getLeafIds(nodes: AccountNode[], targetId: string): string[] {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      return collectLeafIds(node.children || []);
+    }
+    if (node.children) {
+      const found = getLeafIds(node.children, targetId);
+      if (found.length) return found;
+    }
+  }
+  return [];
+}
+
+function collectLeafIds(nodes: AccountNode[]): string[] {
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (!node.id.startsWith("_")) ids.push(node.id);
+    if (node.children) ids.push(...collectLeafIds(node.children));
+  }
+  return ids;
+}
+
+/** Get direct children IDs of a node (one level deep). */
+export function getDirectChildIds(nodes: AccountNode[], targetId: string): string[] {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      return (node.children || []).map(c => c.id);
+    }
+    if (node.children) {
+      const found = getDirectChildIds(node.children, targetId);
+      if (found.length) return found;
+    }
+  }
+  return [];
+}
+
 // ── Format type detection ────────────────────────────────────
 
 export function isRateColumn(id: string): boolean {

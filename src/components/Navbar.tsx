@@ -9,8 +9,9 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
-    { path: "/", label: "HOME" },
+    { path: "/", label: "DASHBOARD" },
     { path: "/compare", label: t("nav.compare").toUpperCase() },
+    { path: "/statements", label: "DEMONSTRAÇÕES" },
   ];
 
   const isActive = (path: string) => location.pathname === path;

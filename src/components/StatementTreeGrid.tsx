@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { ChevronsUpDown, ChevronsDownUp, Filter, X } from "lucide-react";
-import { ACCOUNT_TREE, TAB_LABELS, flattenTree, getDescendantIds, isRateColumn, isQuantityColumn, type FlatAccount } from "@/lib/account-tree";
+import { ACCOUNT_TREE, TAB_LABELS, flattenTree, getDescendantIds, getLeafIds, isRateColumn, isQuantityColumn, type FlatAccount } from "@/lib/account-tree";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -211,7 +211,19 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
 
                   {columns.map((col) => {
                     const isVirtual = account.id.startsWith("_");
-                    const value = isVirtual ? 0 : getValue(col.key, account.id);
+                    let value: number;
+                    if (isVirtual) {
+                      const leafIds = getLeafIds(filteredTree, account.id);
+                      const childValues = leafIds.map(id => getValue(col.key, id));
+                      const nonZero = childValues.filter(v => v !== 0);
+                      if (isRateColumn(leafIds[0] || "")) {
+                        value = nonZero.length > 0 ? nonZero.reduce((a, b) => a + b, 0) / nonZero.length : 0;
+                      } else {
+                        value = childValues.reduce((a, b) => a + b, 0);
+                      }
+                    } else {
+                      value = getValue(col.key, account.id);
+                    }
                     const isNegative = value < 0;
                     const isZero = value === 0;
                     return (
