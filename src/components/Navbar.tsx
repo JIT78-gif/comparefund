@@ -30,11 +30,10 @@ const Navbar = () => {
               <Link
                 key={l.path}
                 to={l.path}
-                className={`relative py-4 text-[12px] tracking-[3px] uppercase font-mono font-semibold transition-colors ${
-                  isActive(l.path)
+                className={`relative py-4 text-[12px] tracking-[3px] uppercase font-mono font-semibold transition-colors ${isActive(l.path)
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 {l.label}
                 {isActive(l.path) && (
@@ -48,18 +47,16 @@ const Navbar = () => {
             <div className="flex items-center gap-1 text-[12px] font-mono tracking-wider">
               <button
                 onClick={() => setLanguage("pt")}
-                className={`transition-colors ${
-                  language === "pt" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`transition-colors ${language === "pt" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 PT
               </button>
               <span className="text-muted-foreground">/</span>
               <button
                 onClick={() => setLanguage("en")}
-                className={`transition-colors ${
-                  language === "en" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`transition-colors ${language === "en" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 EN
               </button>
@@ -82,11 +79,10 @@ const Navbar = () => {
               <Link
                 key={l.path}
                 to={l.path}
-                className={`block py-3 px-4 text-sm tracking-[2px] uppercase transition-colors ${
-                  isActive(l.path)
+                className={`block py-3 px-4 text-sm tracking-[2px] uppercase transition-colors ${isActive(l.path)
                     ? "text-primary font-semibold"
                     : "text-muted-foreground hover:text-primary"
-                }`}
+                  }`}
                 onClick={() => setMobileOpen(false)}
               >
                 {l.label}
