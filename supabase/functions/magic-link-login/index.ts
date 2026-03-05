@@ -38,15 +38,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send magic link
-    const { error: magicLinkError } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
-      email: normalizedEmail,
-    });
-
-    if (magicLinkError) throw magicLinkError;
-
-    // Also send the actual magic link email via signInWithOtp
+    // Send magic link via OTP
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
