@@ -460,8 +460,13 @@ export function getLeafIds(nodes: AccountNode[], targetId: string): string[] {
 function collectLeafIds(nodes: AccountNode[]): string[] {
   const ids: string[] = [];
   for (const node of nodes) {
-    if (!node.id.startsWith("_")) ids.push(node.id);
-    if (node.children) ids.push(...collectLeafIds(node.children));
+    if (!node.children || node.children.length === 0) {
+      // True leaf node — only include if non-virtual
+      if (!node.id.startsWith("_")) ids.push(node.id);
+    } else {
+      // Has children — recurse instead of including this node
+      ids.push(...collectLeafIds(node.children));
+    }
   }
   return ids;
 }
