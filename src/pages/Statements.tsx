@@ -156,12 +156,24 @@ const Statements = () => {
   const displayData = data ?? lastGoodData.current;
 
   // Extract fund hierarchy from loaded data
-  const fundHierarchy = useMemo(() => extractFundHierarchy(displayData), [displayData]);
+  const fundHierarchy = useMemo(() => {
+    const full = extractFundHierarchy(displayData);
+    if (mode === "periods") {
+      return singleCompany && full[singleCompany]
+        ? { [singleCompany]: full[singleCompany] }
+        : {};
+    }
+    const filtered: FundHierarchy = {};
+    for (const key of selectedCompanies) {
+      if (full[key]) filtered[key] = full[key];
+    }
+    return filtered;
+  }, [displayData, mode, singleCompany, selectedCompanies]);
 
   // Reset CNPJ selection when data changes (select all by default)
   useEffect(() => {
     setSelectedCnpjs(new Set());
-  }, [displayData]);
+  }, [displayData, singleCompany, mode]);
 
   const handleRetry = () => {
     queryClient.invalidateQueries({ queryKey: ["cvm-statements", debouncedKey.months, debouncedKey.fundType] });
