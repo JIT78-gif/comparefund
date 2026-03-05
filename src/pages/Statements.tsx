@@ -12,13 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { AlertTriangle, RefreshCw, Info, BarChart3 } from "lucide-react";
 import { invokeStatements, classifyError } from "@/lib/cvm-invoke";
-
-const COMPANIES = [
-  { key: "multiplica", label: "Multiplica" },
-  { key: "red", label: "Red" },
-  { key: "atena", label: "Atena" },
-  { key: "sifra", label: "Sifra" },
-];
+import { fetchCompetitors, type Competitor } from "@/lib/competitors";
 
 const YEARS = Array.from({ length: 8 }, (_, i) => String(2019 + i));
 
@@ -87,6 +81,21 @@ function extractFundHierarchy(
 const Statements = () => {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
+
+  // Dynamic competitors from DB
+  const { data: competitors = [] } = useQuery({
+    queryKey: ["competitors"],
+    queryFn: fetchCompetitors,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const COMPANIES = useMemo(() =>
+    competitors
+      .filter((c) => c.status === "active")
+      .map((c) => ({ key: c.slug, label: c.name })),
+    [competitors]
+  );
+
   const [mode, setMode] = useState<CompareMode>("companies");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["multiplica", "red"]);
   const [singleCompany, setSingleCompany] = useState("multiplica");
