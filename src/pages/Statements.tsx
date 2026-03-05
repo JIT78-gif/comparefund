@@ -74,8 +74,8 @@ function extractFundHierarchy(
       for (const [cnpj, cnpjData] of Object.entries(companyData)) {
         if (!hierarchy[company][cnpj]) {
           hierarchy[company][cnpj] = {
-            fund_name: typeof cnpjData._fund_name === "string" ? cnpjData._fund_name : cnpj,
-            fund_type: typeof cnpjData._fund_type === "string" ? cnpjData._fund_type : "STANDARD",
+            fund_name: typeof cnpjData.fund_name === "string" ? cnpjData.fund_name : cnpj,
+            fund_type: typeof cnpjData.fund_type === "string" ? cnpjData.fund_type : "STANDARD",
           };
         }
       }
