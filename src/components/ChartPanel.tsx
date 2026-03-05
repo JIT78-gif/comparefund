@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Label,
 } from "recharts";
 import { ACCOUNT_TREE, flattenTree, isRateColumn, isQuantityColumn } from "@/lib/account-tree";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -19,16 +19,16 @@ interface ChartPanelProps {
 }
 
 const PALETTE = [
-  "hsl(200, 98%, 39%)",  // primary blue
-  "hsl(145, 100%, 42%)", // green
-  "hsl(0, 72%, 50%)",    // red
-  "hsl(38, 92%, 50%)",   // orange
-  "hsl(280, 65%, 60%)",  // purple
-  "hsl(180, 70%, 45%)",  // teal
-  "hsl(330, 80%, 55%)",  // pink
-  "hsl(55, 90%, 50%)",   // yellow
-  "hsl(210, 70%, 60%)",  // light blue
-  "hsl(15, 85%, 55%)",   // coral
+  "hsl(200, 98%, 39%)",
+  "hsl(145, 100%, 42%)",
+  "hsl(0, 72%, 50%)",
+  "hsl(38, 92%, 50%)",
+  "hsl(280, 65%, 60%)",
+  "hsl(180, 70%, 45%)",
+  "hsl(330, 80%, 55%)",
+  "hsl(55, 90%, 50%)",
+  "hsl(210, 70%, 60%)",
+  "hsl(15, 85%, 55%)",
 ];
 
 const brFmt = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -64,7 +64,7 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
 
   const accountIds = useMemo(() => Array.from(selectedAccounts), [selectedAccounts]);
 
-  // Data for bar: one row per column, one key per account
+  // Unified data: X-axis = columns (periods/companies), one series per account
   const chartData = useMemo(() => {
     return columns.map((col) => {
       const row: Record<string, unknown> = { name: col.label };
@@ -75,73 +75,101 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
     });
   }, [columns, accountIds, getValue]);
 
-  // Transposed data for line/area: one row per account, one series per column
-  const chartDataTransposed = useMemo(() => {
-    return accountIds.map((accId) => {
-      const row: Record<string, unknown> = { name: labelMap.get(accId) || accId };
-      for (const col of columns) {
-        row[col.key] = getValue(col.key, accId);
-      }
-      return row;
-    });
-  }, [accountIds, columns, getValue, labelMap]);
-
-  const colLabelMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const col of columns) m.set(col.key, col.label);
-    return m;
-  }, [columns]);
-
-  // Data for pie: sum across columns for each account
+  // Pie data: sum absolute values across columns per account, filter zeros
   const pieData = useMemo(() => {
-    return accountIds.map((accId, i) => {
-      let total = 0;
-      for (const col of columns) total += Math.abs(getValue(col.key, accId));
-      return { name: labelMap.get(accId) || accId, value: total, fill: PALETTE[i % PALETTE.length] };
-    });
+    return accountIds
+      .map((accId, i) => {
+        let total = 0;
+        for (const col of columns) total += Math.abs(getValue(col.key, accId));
+        return {
+          name: labelMap.get(accId) || accId,
+          accountId: accId,
+          value: total,
+          fill: PALETTE[i % PALETTE.length],
+        };
+      })
+      .filter((d) => d.value > 0);
   }, [accountIds, columns, getValue, labelMap]);
+
+  const pieTotal = useMemo(() => pieData.reduce((s, d) => s + d.value, 0), [pieData]);
 
   if (selectedAccounts.size === 0) return null;
 
-  const CustomTooltip = ({ active, payload, label, labelMapOverride }: any) => {
+  const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
-    const lm: Map<string, string> = labelMapOverride || labelMap;
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
         <p className="font-display font-semibold text-foreground mb-1">{label}</p>
         {payload.map((entry: any, i: number) => (
           <p key={i} className="text-muted-foreground" style={{ color: entry.color }}>
-            {lm.get(entry.dataKey) || entry.dataKey}: {formatTooltipValue(entry.value, entry.dataKey)}
+            {labelMap.get(entry.dataKey) || entry.dataKey}: {formatTooltipValue(entry.value, entry.dataKey)}
           </p>
         ))}
       </div>
     );
   };
 
-  const isTransposed = chartType === "line" || chartType === "area";
+  const PieTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const entry = payload[0];
+    const pct = pieTotal > 0 ? ((entry.value / pieTotal) * 100).toFixed(1) : "0";
+    return (
+      <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm">
+        <p className="font-display font-semibold text-foreground mb-1">{entry.name}</p>
+        <p className="text-muted-foreground" style={{ color: entry.payload.fill }}>
+          {formatTooltipValue(entry.value, entry.payload.accountId)} ({pct}%)
+        </p>
+      </div>
+    );
+  };
+
+  const showFewDataWarning = (chartType === "line" || chartType === "area") && columns.length < 2;
 
   const renderCartesian = () => {
     const ChartComp = chartType === "line" ? LineChart : chartType === "area" ? AreaChart : BarChart;
-    const data = isTransposed ? chartDataTransposed : chartData;
-    const seriesKeys = isTransposed ? columns.map(c => c.key) : accountIds;
-    const seriesLabelMap = isTransposed ? colLabelMap : labelMap;
+    const showLabels = accountIds.length <= 3 && columns.length <= 6;
 
     return (
       <ResponsiveContainer width="100%" height={400}>
-        <ChartComp data={data} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+        <ChartComp data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatTick(v)} width={80} />
-          <Tooltip content={<CustomTooltip labelMapOverride={seriesLabelMap} />} />
+          <Tooltip content={<CustomTooltip />} />
           <Legend
             formatter={(value: string) => (
-              <span className="text-xs text-foreground">{seriesLabelMap.get(value) || value}</span>
+              <span className="text-xs text-foreground">{labelMap.get(value) || value}</span>
             )}
           />
-          {seriesKeys.map((key, i) => {
+          {accountIds.map((key, i) => {
             const color = PALETTE[i % PALETTE.length];
-            if (chartType === "line") return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 4 }} />;
-            if (chartType === "area") return <Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.2} />;
+            if (chartType === "line")
+              return (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 6 }}
+                  connectNulls
+                  label={showLabels ? { fontSize: 10, position: "top", formatter: (v: number) => formatTick(v, key) } : false}
+                />
+              );
+            if (chartType === "area")
+              return (
+                <Area
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stroke={color}
+                  fill={color}
+                  fillOpacity={0.2}
+                  connectNulls
+                  activeDot={{ r: 6 }}
+                />
+              );
             return <Bar key={key} dataKey={key} fill={color} radius={[4, 4, 0, 0]} />;
           })}
         </ChartComp>
@@ -149,19 +177,37 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
     );
   };
 
-  const renderPie = () => (
-    <ResponsiveContainer width="100%" height={400}>
-      <PieChart>
-        <Pie data={pieData} cx="50%" cy="50%" outerRadius={150} dataKey="value" label={({ name, percent }) => `${name.split(" - ").pop()} (${(percent * 100).toFixed(0)}%)`}>
-          {pieData.map((entry, i) => (
-            <Cell key={i} fill={entry.fill} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(value: number) => `R$ ${brFmt.format(value)}`} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
-  );
+  const renderPie = () => {
+    if (pieData.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+          Nenhum dado disponível para o gráfico de pizza.
+        </div>
+      );
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={400}>
+        <PieChart>
+          <Pie
+            data={pieData}
+            cx="50%"
+            cy="50%"
+            outerRadius={150}
+            dataKey="value"
+            nameKey="name"
+            label={({ name, percent }) => `${name.split(" - ").pop()} (${(percent * 100).toFixed(0)}%)`}
+          >
+            {pieData.map((entry, i) => (
+              <Cell key={i} fill={entry.fill} />
+            ))}
+          </Pie>
+          <Tooltip content={<PieTooltip />} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  };
 
   return (
     <div className="mt-8 rounded-lg border border-primary/30 bg-card p-6">
@@ -184,6 +230,11 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
+      {showFewDataWarning && (
+        <p className="text-xs text-muted-foreground mb-4">
+          ⚠ Apenas {columns.length} coluna(s) — adicione mais períodos ou empresas para melhor visualização em linha/área.
+        </p>
+      )}
       {chartType === "pie" ? renderPie() : renderCartesian()}
     </div>
   );
