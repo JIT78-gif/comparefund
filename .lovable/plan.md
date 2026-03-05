@@ -1,38 +1,83 @@
 
 
-## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
+## Plan: Improve Data Extraction & CNPJ Search Logic
 
-### Problem
-The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
+This plan covers two areas: (1) hardening the CSV data extraction pipeline with validation, and (2) enhancing the CNPJ discovery search in `cvm-discover`.
 
-```typescript
-const isVirtual = account.id.startsWith("_");
-const value = isVirtual ? 0 : getValue(col.key, account.id);
+---
+
+### 1. Data Validation in Edge Functions
+
+**Files:** `supabase/functions/cvm-compare/index.ts`, `supabase/functions/cvm-statements/index.ts`
+
+- Add CSV row validation: skip rows where CNPJ is empty or malformed (not 14 digits after cleaning)
+- Add numeric range checks: flag/log values that are negative or suspiciously large (e.g., net_assets > 1 trillion)
+- Add row count logging per fund to detect duplicate aggregation
+- Validate that `parseNum` handles edge cases: empty strings, commas as thousands separators, negative values with parentheses
+- Log summary stats after parsing: total rows parsed, rows matched, rows skipped with reasons
+
+### 2. Improve `cvm-discover` Search Logic
+
+**File:** `supabase/functions/cvm-discover/index.ts`
+
+- **Exact CNPJ search**: Already supported via `searchCnpjs` param — clean up to handle formatted CNPJs (with dots/slashes) and partial CNPJ matching (prefix search)
+- **Partial name search**: Add fuzzy/substring matching — split multi-word search terms and match if ALL words appear (instead of exact substring), enabling queries like "ATENA SECURITIZADORA" to match "FIDC ATENA SECURITIZADORA DE RECEBIVEIS"
+- **Fallback search**: If Tab I yields zero results, also scan Tab IV (which has `DENOM_SOCIAL`) as a fallback
+- **Deduplication**: Current results can contain duplicate CNPJs from multiple rows in the same file — deduplicate by CNPJ, keeping the richest record
+- **Result pagination/limiting**: Add `limit` parameter (default 100) to prevent massive response payloads; return `total_matches` count alongside truncated results
+- **Response caching**: Cache search results in memory (per edge function invocation) — not persistent, but avoid re-parsing the same ZIP if called with different search terms in sequence
+
+### 3. Add Search Results to Admin UI
+
+**File:** `src/pages/Admin.tsx`
+
+- Add a "Search CVM" panel in the Competitors tab that calls `cvm-discover`
+- Allow admin to search by name or CNPJ, view results, and one-click add a found CNPJ to a competitor
+- Show fund name, admin, type, and CNPJ in search results
+
+### 4. CSV Export Validation Test Cases
+
+**File:** `src/test/csv-validation.test.ts` (new)
+
+- Unit tests for `parseNum` edge cases (extract to shared utility)
+- Unit tests for `cleanCnpj` with various formats
+- Test that search logic correctly handles: exact CNPJ, partial name, multi-word, empty results
+
+---
+
+### Technical Details
+
+**`cvm-discover` search improvements (pseudocode):**
+```text
+// Multi-word matching
+const termWords = term.split(/\s+/);
+const allWordsMatch = termWords.every(w => searchText.includes(w));
+
+// Partial CNPJ (prefix match)
+const cnpjMatched = cnpjSearch.some(c => rowCnpj.startsWith(c) || c === rowCnpj);
+
+// Dedup by CNPJ
+const seen = new Set<string>();
+if (seen.has(rowCnpj)) continue;
+seen.add(rowCnpj);
+
+// Limit results
+if (matches.length >= limit) break;
 ```
 
-All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
+**Validation in parsers:**
+```text
+// Skip invalid CNPJ rows
+const cnpj = cleanCnpj(row[cnpjIdx] || "");
+if (!/^\d{14}$/.test(cnpj)) continue;
 
-### Changes
+// Log anomalies
+if (val > 1e12) console.warn(`Suspicious value ${val} for ${cnpj}`);
+```
 
-**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
-- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
-
-**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
-- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
-- For rate columns (Tab IX), compute average instead of sum
-- Pass the tree structure to look up children
-
-**3. `src/components/Navbar.tsx`** — Add missing nav link
-- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
-- Rename "HOME" to "DASHBOARD"
-
-**4. `src/index.css`** — Switch body font
-- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
-- Keep `font-mono` utility class for numeric table cells only
-
-### Files
-- `src/lib/account-tree.ts` — add child lookup helper
-- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
-- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
-- `src/index.css` — change body font to Inter
+### Implementation Order
+1. Improve `cvm-discover` search logic (exact CNPJ, partial name, dedup, limit)
+2. Add data validation checks to `cvm-compare` and `cvm-statements`
+3. Add CVM search panel to Admin UI
+4. Create test file for shared utilities
 
