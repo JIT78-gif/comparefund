@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StatementTreeGrid from "@/components/StatementTreeGrid";
 import ChartPanel from "@/components/ChartPanel";
+import FundSelector, { type FundHierarchy } from "@/components/FundSelector";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -61,6 +62,28 @@ const MonthYearPicker = ({
   </div>
 );
 
+/** Extract fund hierarchy from response data: company -> cnpj -> { fund_name, fund_type } */
+function extractFundHierarchy(
+  data: Record<string, Record<string, Record<string, Record<string, number | string>>>> | null
+): FundHierarchy {
+  if (!data) return {};
+  const hierarchy: FundHierarchy = {};
+  for (const monthData of Object.values(data)) {
+    for (const [company, companyData] of Object.entries(monthData)) {
+      if (!hierarchy[company]) hierarchy[company] = {};
+      for (const [cnpj, cnpjData] of Object.entries(companyData)) {
+        if (!hierarchy[company][cnpj]) {
+          hierarchy[company][cnpj] = {
+            fund_name: typeof cnpjData.fund_name === "string" ? cnpjData.fund_name : cnpj,
+            fund_type: typeof cnpjData.fund_type === "string" ? cnpjData.fund_type : "STANDARD",
+          };
+        }
+      }
+    }
+  }
+  return hierarchy;
+}
+
 const Statements = () => {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
@@ -68,6 +91,7 @@ const Statements = () => {
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["multiplica", "red"]);
   const [singleCompany, setSingleCompany] = useState("multiplica");
   const [fundType, setFundType] = useState("STANDARD");
+  const [selectedCnpjs, setSelectedCnpjs] = useState<Set<string>>(new Set());
 
   const [year1, setYear1] = useState("2024");
   const [month1, setMonth1] = useState("11");
@@ -122,6 +146,14 @@ const Statements = () => {
 
   const displayData = data ?? lastGoodData.current;
 
+  // Extract fund hierarchy from loaded data
+  const fundHierarchy = useMemo(() => extractFundHierarchy(displayData), [displayData]);
+
+  // Reset CNPJ selection when data changes (select all by default)
+  useEffect(() => {
+    setSelectedCnpjs(new Set());
+  }, [displayData]);
+
   const handleRetry = () => {
     queryClient.invalidateQueries({ queryKey: ["cvm-statements", debouncedKey.months, debouncedKey.fundType] });
   };
@@ -151,7 +183,9 @@ const Statements = () => {
       const isRate = accountId.startsWith("TAB_IX_") || accountId === "TAB_X_PR_GARANTIA_DIRCRED";
       const aggregate = (companyData: Record<string, Record<string, number | string>>) => {
         let sum = 0, count = 0;
-        for (const cnpjData of Object.values(companyData)) {
+        for (const [cnpj, cnpjData] of Object.entries(companyData)) {
+          // Filter by selected CNPJs (empty set = all selected)
+          if (selectedCnpjs.size > 0 && !selectedCnpjs.has(cnpj)) continue;
           const v = typeof cnpjData[accountId] === "number" ? cnpjData[accountId] as number : 0;
           if (isRate) { if (v !== 0) { sum += v; count++; } }
           else { sum += v; }
@@ -165,7 +199,7 @@ const Statements = () => {
       const companyData = displayData[colKey]?.[singleCompany];
       return companyData ? aggregate(companyData) : 0;
     },
-    [displayData, mode, debouncedKey.months, singleCompany]
+    [displayData, mode, debouncedKey.months, singleCompany, selectedCnpjs]
   );
 
   return (
@@ -232,7 +266,12 @@ const Statements = () => {
                   </label>
                 ))}
               </div>
-              <div className="sm:ml-auto">
+              <div className="flex items-center gap-2 sm:ml-auto">
+                <FundSelector
+                  hierarchy={fundHierarchy}
+                  selectedCnpjs={selectedCnpjs}
+                  onSelectionChange={setSelectedCnpjs}
+                />
                 <MonthYearPicker label={t("statements.period")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
               </div>
             </>
@@ -246,6 +285,11 @@ const Statements = () => {
                     {COMPANIES.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                <FundSelector
+                  hierarchy={fundHierarchy}
+                  selectedCnpjs={selectedCnpjs}
+                  onSelectionChange={setSelectedCnpjs}
+                />
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <MonthYearPicker label={t("statements.period1")} year={year1} setYear={setYear1} month={month1} setMonth={setMonth1} monthLabels={monthLabels} />
