@@ -63,6 +63,24 @@ const Compare = () => {
   const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
 
+  const { data: competitorList = [] } = useQuery({
+    queryKey: ["competitors"],
+    queryFn: fetchCompetitors,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const COMPANIES = useMemo(() =>
+    competitorList
+      .filter((c) => c.status === "active")
+      .map((c, i) => ({
+        key: c.slug,
+        label: c.name,
+        color: BG_COLORS[i % BG_COLORS.length],
+        chartColor: CHART_COLORS[i % CHART_COLORS.length],
+      })),
+    [competitorList]
+  );
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["compare", year, month + 1, fundType],
     queryFn: async () => {
