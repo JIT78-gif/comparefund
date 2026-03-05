@@ -1,62 +1,38 @@
 
 
-## Email-Based Authentication with Magic Links & Admin Whitelist
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-### Overview
-Replace the current password-based admin gate with Supabase Auth magic links. **All pages** will require authentication. Only whitelisted emails can access the app.
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
-### Database Changes
+```typescript
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
+```
 
-**Table: `authorized_emails`**
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| email | text NOT NULL UNIQUE | Lowercased |
-| status | text NOT NULL DEFAULT 'active' | 'active' or 'inactive' |
-| added_by | uuid nullable | References auth.users(id) |
-| created_at | timestamptz | |
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-RLS: SELECT for authenticated users. INSERT/UPDATE/DELETE restricted to admin role.
+### Changes
 
-**Table: `user_roles`** (per security guidelines)
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid NOT NULL | References auth.users(id) ON DELETE CASCADE |
-| role | app_role NOT NULL | Enum: 'admin', 'user' |
-| UNIQUE(user_id, role) | | |
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-Security definer function `has_role(user_id, role)` for RLS policies.
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
 
-### Edge Function: `auth-guard`
-- Called during magic link sign-in flow
-- Checks if the email exists in `authorized_emails` with status='active'
-- If not whitelisted, returns error (prevents unauthorized access)
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
 
-### Auth Flow
-1. User visits any page → redirected to `/login` if no session
-2. User enters email on login page
-3. Backend checks email against `authorized_emails` table before sending magic link
-4. User clicks link in email → session created → redirected to `/`
-5. Session persists 24 hours, auto-refresh enabled
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
 
-### File Changes
-
-| File | Action |
-|------|--------|
-| DB migration | Create `authorized_emails`, `user_roles` tables, `app_role` enum, `has_role()` function, seed initial admin email |
-| `supabase/functions/magic-link-login/index.ts` | **Create** — validates email against whitelist, then calls `supabase.auth.admin.generateLink()` to send magic link |
-| `src/pages/Login.tsx` | **Create** — email input, "Send magic link" button, success/error states |
-| `src/components/AuthGuard.tsx` | **Create** — wrapper component checking auth session, redirects to `/login` if unauthenticated |
-| `src/App.tsx` | Wrap all routes (except `/login`) with AuthGuard |
-| `src/pages/Admin.tsx` | Remove password gate, add "Authorized Emails" management section (add/remove/toggle emails), keep competitor management |
-| `src/components/Navbar.tsx` | Add logout button, conditionally show ADMIN link only for admin role users |
-| `src/lib/competitors.ts` | Update `invokeCompetitorAdmin` to use auth token instead of password |
-| `supabase/functions/competitor-admin/index.ts` | Replace password check with JWT auth validation (check `has_role` for admin) |
-
-### Security
-- Magic link tokens expire after 1 hour (Supabase default)
-- Email whitelist checked server-side before sending link
-- All write operations require admin role via RLS + edge function JWT validation
-- No client-side role checks — all enforced via database policies and server-side functions
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 
