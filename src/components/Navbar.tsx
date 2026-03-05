@@ -1,21 +1,30 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Menu, X } from "lucide-react";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { supabase } from "@/integrations/supabase/client";
+import { Menu, X, LogOut } from "lucide-react";
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
+  const { isAdmin } = useIsAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
     { path: "/", label: "DASHBOARD" },
     { path: "/compare", label: t("nav.compare").toUpperCase() },
     { path: "/statements", label: "DEMONSTRAÇÕES" },
-    { path: "/admin", label: "ADMIN" },
+    ...(isAdmin ? [{ path: "/admin", label: "ADMIN" }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
 
   return (
     <>
@@ -48,20 +57,25 @@ const Navbar = () => {
             <div className="flex items-center gap-1 text-[12px] font-mono tracking-wider">
               <button
                 onClick={() => setLanguage("pt")}
-                className={`transition-colors ${language === "pt" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                className={`transition-colors ${language === "pt" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"}`}
               >
                 PT
               </button>
               <span className="text-muted-foreground">/</span>
               <button
                 onClick={() => setLanguage("en")}
-                className={`transition-colors ${language === "en" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                className={`transition-colors ${language === "en" ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"}`}
               >
                 EN
               </button>
             </div>
+            <button
+              onClick={handleLogout}
+              className="hidden md:flex items-center gap-1 text-[12px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="md:hidden p-1.5 text-muted-foreground hover:text-foreground transition-colors"
@@ -89,6 +103,12 @@ const Navbar = () => {
                 {l.label}
               </Link>
             ))}
+            <button
+              onClick={() => { setMobileOpen(false); handleLogout(); }}
+              className="block py-3 px-4 text-sm tracking-[2px] uppercase text-muted-foreground hover:text-primary text-left"
+            >
+              LOGOUT
+            </button>
           </div>
         </div>
       )}

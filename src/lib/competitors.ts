@@ -29,19 +29,30 @@ export async function fetchCompetitors(): Promise<Competitor[]> {
   return (data as unknown as Competitor[]) || [];
 }
 
-export async function invokeCompetitorAdmin(action: string, payload: Record<string, unknown> = {}, password?: string) {
+export async function invokeCompetitorAdmin(action: string, payload: Record<string, unknown> = {}) {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  
+  // Get the current session token
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  };
+  
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    headers.Authorization = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+  }
+
   const res = await fetch(
     `https://${projectId}.supabase.co/functions/v1/competitor-admin`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({ action, password, ...payload }),
+      headers,
+      body: JSON.stringify({ action, ...payload }),
     }
   );
   const data = await res.json();
