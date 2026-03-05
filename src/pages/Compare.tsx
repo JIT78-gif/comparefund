@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
@@ -8,6 +8,7 @@ import MetricCard from "@/components/MetricCard";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatNumber, MONTHS } from "@/lib/format";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { fetchCompetitors } from "@/lib/competitors";
 
 interface CompanyData {
   net_assets: number;
@@ -38,11 +39,22 @@ interface FundDetail {
 
 type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
 
-const COMPANIES = [
-  { key: "multiplica", label: "Multiplica", color: "bg-primary", chartColor: "hsl(152, 100%, 45%)" }, // Neon Green
-  { key: "red", label: "Red", color: "bg-[#0b1b36]", chartColor: "hsl(215, 60%, 15%)" }, // Dark Blue/Indigo
-  { key: "atena", label: "Atena", color: "bg-[#e2e8f0]", chartColor: "hsl(210, 40%, 96%)" }, // White/Grey
-  { key: "sifra", label: "Sifra", color: "bg-[#ff4d4f]", chartColor: "hsl(359, 100%, 65%)" }, // Neon Red
+const CHART_COLORS = [
+  "hsl(152, 100%, 45%)", // Green
+  "hsl(215, 60%, 15%)",  // Dark Blue
+  "hsl(210, 40%, 96%)",  // White/Grey
+  "hsl(359, 100%, 65%)", // Red
+  "hsl(45, 100%, 50%)",  // Yellow
+  "hsl(280, 80%, 55%)",  // Purple
+];
+
+const BG_COLORS = [
+  "bg-primary",
+  "bg-[#0b1b36]",
+  "bg-[#e2e8f0]",
+  "bg-[#ff4d4f]",
+  "bg-[#eab308]",
+  "bg-[#a855f7]",
 ];
 
 const Compare = () => {
@@ -50,6 +62,24 @@ const Compare = () => {
   const [year, setYear] = useState(2024);
   const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
+
+  const { data: competitorList = [] } = useQuery({
+    queryKey: ["competitors"],
+    queryFn: fetchCompetitors,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const COMPANIES = useMemo(() =>
+    competitorList
+      .filter((c) => c.status === "active")
+      .map((c, i) => ({
+        key: c.slug,
+        label: c.name,
+        color: BG_COLORS[i % BG_COLORS.length],
+        chartColor: CHART_COLORS[i % CHART_COLORS.length],
+      })),
+    [competitorList]
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["compare", year, month + 1, fundType],

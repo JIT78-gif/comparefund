@@ -11,15 +11,33 @@ const CACHE_TTL_HOURS = 24;
 const FETCH_TIMEOUT_MS = 45_000;
 const GLOBAL_BUDGET_MS = 55_000;
 
-const CNPJS: Record<string, string[]> = {
-  multiplica: ["23216398000101", "40211675000102"],
-  red: ["17250006000110", "11489344000122"],
-  atena: ["31904898000156"],
-  cifra: ["08818152000108"],
-  sifra: ["08678936000188", "17012019000150", "41351629000163", "42462120000150", "54889584000127", "14166140000149"],
-};
+// Dynamic competitor data — loaded from DB at request time
+let CNPJS: Record<string, string[]> = {};
+let NP_OVERRIDE: Set<string> = new Set();
 
-const NP_OVERRIDE: Set<string> = new Set(["40211675000102", "17012019000150"]);
+async function loadCompetitors() {
+  const { data, error } = await supabase
+    .from("competitors")
+    .select("slug, competitor_cnpjs(cnpj, fund_type_override, status)")
+    .eq("status", "active");
+  if (error) {
+    console.error("[loadCompetitors] DB error, using empty dict:", error.message);
+    return;
+  }
+  const cnpjs: Record<string, string[]> = {};
+  const npSet = new Set<string>();
+  for (const comp of data || []) {
+    const activeCnpjs = ((comp as any).competitor_cnpjs || [])
+      .filter((c: any) => c.status === "active");
+    cnpjs[comp.slug] = activeCnpjs.map((c: any) => c.cnpj);
+    for (const c of activeCnpjs) {
+      if (c.fund_type_override === "NP") npSet.add(c.cnpj);
+    }
+  }
+  CNPJS = cnpjs;
+  NP_OVERRIDE = npSet;
+  console.log(`[loadCompetitors] Loaded ${Object.keys(CNPJS).length} competitors, ${NP_OVERRIDE.size} NP overrides`);
+}
 
 function cleanCnpj(raw: string): string {
   return raw.replace(/[.\-\/]/g, "");
@@ -235,6 +253,9 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Load competitors from DB
+    await loadCompetitors();
 
     const { months, fundType } = body;
 

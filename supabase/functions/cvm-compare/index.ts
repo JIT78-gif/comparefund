@@ -1,15 +1,38 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import JSZip from "npm:jszip@3.10.1";
 
-const CNPJS: Record<string, string[]> = {
-  multiplica: ["23216398000101", "40211675000102"],
-  red: ["17250006000110", "11489344000122"],
-  atena: ["31904898000156"],
-  cifra: ["08818152000108"],
-  sifra: ["14166140000149", "17012019000150"],
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-const NP_OVERRIDE: Set<string> = new Set(["40211675000102", "17012019000150"]);
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+let CNPJS: Record<string, string[]> = {};
+let NP_OVERRIDE: Set<string> = new Set();
+
+async function loadCompetitors() {
+  const { data, error } = await supabase
+    .from("competitors")
+    .select("slug, competitor_cnpjs(cnpj, fund_type_override, status)")
+    .eq("status", "active");
+  if (error) {
+    console.error("[loadCompetitors] DB error:", error.message);
+    return;
+  }
+  const cnpjs: Record<string, string[]> = {};
+  const npSet = new Set<string>();
+  for (const comp of data || []) {
+    const activeCnpjs = ((comp as any).competitor_cnpjs || [])
+      .filter((c: any) => c.status === "active");
+    cnpjs[comp.slug] = activeCnpjs.map((c: any) => c.cnpj);
+    for (const c of activeCnpjs) {
+      if (c.fund_type_override === "NP") npSet.add(c.cnpj);
+    }
+  }
+  CNPJS = cnpjs;
+  NP_OVERRIDE = npSet;
+}
 
 function cleanCnpj(raw: string): string {
   return raw.replace(/[.\-\/]/g, "");
@@ -62,6 +85,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await loadCompetitors();
     const { refMonth, fundType } = await req.json();
 
     if (!refMonth || refMonth.length !== 6) {
