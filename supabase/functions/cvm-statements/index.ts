@@ -45,7 +45,21 @@ function cleanCnpj(raw: string): string {
 
 function parseNum(val: string | undefined): number {
   if (!val) return 0;
-  return parseFloat(val.replace(/"/g, "").replace(",", ".")) || 0;
+  let cleaned = val.replace(/"/g, "").trim();
+  const isNeg = cleaned.startsWith("(") && cleaned.endsWith(")");
+  if (isNeg) cleaned = cleaned.slice(1, -1);
+  cleaned = cleaned.replace(",", ".");
+  const parts = cleaned.split(".");
+  if (parts.length > 2) {
+    const last = parts.pop()!;
+    cleaned = parts.join("") + "." + last;
+  }
+  const num = parseFloat(cleaned) || 0;
+  return isNeg ? -num : num;
+}
+
+function isValidCnpj(cnpj: string): boolean {
+  return /^\d{14}$/.test(cnpj);
 }
 
 function getCompany(cnpj: string): string | null {
@@ -177,6 +191,8 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
   const fundData: Record<string, Record<string, number>> = {};
   const fundNames: Record<string, string> = {};
   const fundTypes: Record<string, string> = {};
+  let totalRows = 0, matchedRows = 0, skippedCnpj = 0, anomalies = 0;
+
   for (const [filename, file] of Object.entries(zip.files)) {
     if (file.dir || !filename.endsWith(".csv")) continue;
 
@@ -206,9 +222,12 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
     const condominioIdx = header.indexOf("CONDOM");
 
     for (const row of rows) {
+      totalRows++;
       const cnpj = cleanCnpj(row[cnpjIdx] || "");
+      if (!isValidCnpj(cnpj)) { skippedCnpj++; continue; }
       const company = getCompany(cnpj);
       if (!company) continue;
+      matchedRows++;
       if (nameIdx !== -1 && !fundNames[cnpj]) fundNames[cnpj] = row[nameIdx] || "";
       if (isTabI && !fundTypes[cnpj]) {
         fundTypes[cnpj] = getFundType(cnpj, fundNames[cnpj] || "", tpFundoIdx !== -1 ? row[tpFundoIdx] || "" : "", condominioIdx !== -1 ? row[condominioIdx] || "" : "");
@@ -216,10 +235,13 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
       if (!fundData[cnpj]) fundData[cnpj] = {};
       for (const col of tabColumns) {
         const val = parseNum(row[col.idx]);
+        if (Math.abs(val) > 1e12) { console.warn(`[anomaly] ${col.name}=${val} cnpj=${cnpj}`); anomalies++; }
         if (val !== 0) fundData[cnpj][col.name] = (fundData[cnpj][col.name] || 0) + val;
       }
     }
   }
+
+  console.log(`[parse-stats] total=${totalRows} matched=${matchedRows} skippedCnpj=${skippedCnpj} anomalies=${anomalies}`);
 
   const result: MonthResult = {};
   for (const [cnpj, data] of Object.entries(fundData)) {

@@ -11,13 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2 } from "lucide-react";
 
 interface AuthorizedEmail {
   id: string;
   email: string;
   status: string;
   created_at: string;
+}
+
+interface CvmSearchResult {
+  cnpj: string;
+  name: string;
+  admin: string;
+  tp_fundo_classe: string;
+  condom: string;
 }
 
 const Admin = () => {
@@ -40,6 +49,14 @@ const Admin = () => {
   // Email dialog
   const [addEmailOpen, setAddEmailOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+
+  // CVM Search
+  const [cvmSearchQuery, setCvmSearchQuery] = useState("");
+  const [cvmSearchField, setCvmSearchField] = useState("ALL");
+  const [cvmSearchMonth, setCvmSearchMonth] = useState("202412");
+  const [cvmResults, setCvmResults] = useState<CvmSearchResult[]>([]);
+  const [cvmSearching, setCvmSearching] = useState(false);
+  const [cvmAddTarget, setCvmAddTarget] = useState("");
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ["competitors"],
@@ -115,6 +132,51 @@ const Admin = () => {
     setNewEmail("");
     setAddEmailOpen(false);
     toast({ title: "Email added to whitelist" });
+  };
+
+  const handleCvmSearch = async () => {
+    if (!cvmSearchQuery.trim()) return;
+    setCvmSearching(true);
+    setCvmResults([]);
+    try {
+      const isCnpjSearch = /^\d{2,14}$/.test(cvmSearchQuery.replace(/[.\-\/]/g, ""));
+      const body: Record<string, unknown> = { refMonth: cvmSearchMonth, limit: 50 };
+      if (isCnpjSearch) {
+        body.searchCnpjs = [cvmSearchQuery];
+        body.searchTerms = [];
+      } else {
+        body.searchTerms = [cvmSearchQuery];
+        body.searchField = cvmSearchField;
+      }
+      const { data, error } = await supabase.functions.invoke("cvm-discover", { body });
+      if (error) throw error;
+      setCvmResults(data?.matches || []);
+      if ((data?.matches || []).length === 0) {
+        toast({ title: "No results", description: "No funds found matching your search." });
+      }
+    } catch (err) {
+      toast({ title: "Search failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setCvmSearching(false);
+    }
+  };
+
+  const handleAddFromCvm = (result: CvmSearchResult) => {
+    if (!cvmAddTarget) {
+      toast({ title: "Select a competitor first", description: "Choose which competitor to add this CNPJ to.", variant: "destructive" });
+      return;
+    }
+    const cleanCnpj = result.cnpj.replace(/[.\-\/]/g, "");
+    mutation.mutate({
+      action: "add_cnpj",
+      payload: {
+        competitor_id: cvmAddTarget,
+        cnpj: cleanCnpj,
+        fund_name: result.name || null,
+        fund_type_override: result.tp_fundo_classe?.includes("NP") ? "NP" : null,
+      },
+    });
+    toast({ title: "CNPJ added", description: `${cleanCnpj} added to competitor` });
   };
 
   const formatCnpj = (cnpj: string) => {
@@ -250,6 +312,96 @@ const Admin = () => {
         {/* Competitors Tab */}
         {activeTab === "competitors" && (
           <div>
+            {/* CVM Search Panel */}
+            <div className="border border-border rounded-md p-4 mb-6 bg-card">
+              <div className="flex items-center gap-2 mb-3">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-display font-semibold text-foreground uppercase tracking-wider">Search CVM Database</h3>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                <Input
+                  placeholder="Fund name or CNPJ..."
+                  value={cvmSearchQuery}
+                  onChange={(e) => setCvmSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCvmSearch()}
+                  className="flex-1"
+                />
+                <Select value={cvmSearchField} onValueChange={setCvmSearchField}>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All fields</SelectItem>
+                    <SelectItem value="NAME">Name only</SelectItem>
+                    <SelectItem value="ADMIN">Admin only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="YYYYMM"
+                  value={cvmSearchMonth}
+                  onChange={(e) => setCvmSearchMonth(e.target.value)}
+                  className="w-[100px]"
+                />
+                <Button onClick={handleCvmSearch} disabled={cvmSearching || !cvmSearchQuery.trim()} size="sm">
+                  {cvmSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                </Button>
+              </div>
+
+              {cvmResults.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-muted-foreground">{cvmResults.length} results — Add to:</span>
+                    <Select value={cvmAddTarget} onValueChange={setCvmAddTarget}>
+                      <SelectTrigger className="w-[200px] h-8 text-xs">
+                        <SelectValue placeholder="Select competitor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {competitors.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto border border-border rounded">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted/50">
+                        <tr>
+                          <th className="text-left p-2 text-muted-foreground">CNPJ</th>
+                          <th className="text-left p-2 text-muted-foreground">Name</th>
+                          <th className="text-left p-2 text-muted-foreground">Admin</th>
+                          <th className="text-left p-2 text-muted-foreground">Type</th>
+                          <th className="p-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cvmResults.map((r) => (
+                          <tr key={r.cnpj} className="border-t border-border/50 hover:bg-muted/10">
+                            <td className="p-2 font-mono">{formatCnpj(r.cnpj)}</td>
+                            <td className="p-2 max-w-[300px] truncate" title={r.name}>{r.name}</td>
+                            <td className="p-2 max-w-[150px] truncate text-muted-foreground" title={r.admin}>{r.admin}</td>
+                            <td className="p-2">
+                              {r.tp_fundo_classe && <Badge variant="outline" className="text-[10px]">{r.tp_fundo_classe}</Badge>}
+                            </td>
+                            <td className="p-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-primary"
+                                onClick={() => handleAddFromCvm(r)}
+                                disabled={!cvmAddTarget}
+                              >
+                                <Plus className="h-3 w-3 mr-1" /> Add
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between mb-4">
               <p className="text-muted-foreground text-sm">Manage fund managers and their CNPJs</p>
               <Dialog open={addCompOpen} onOpenChange={setAddCompOpen}>
