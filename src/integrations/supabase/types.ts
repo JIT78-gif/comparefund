@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      competitor_cnpjs: {
+        Row: {
+          cnpj: string
+          competitor_id: string
+          created_at: string
+          fund_name: string | null
+          fund_type_override: string | null
+          id: string
+          status: string
+        }
+        Insert: {
+          cnpj: string
+          competitor_id: string
+          created_at?: string
+          fund_name?: string | null
+          fund_type_override?: string | null
+          id?: string
+          status?: string
+        }
+        Update: {
+          cnpj?: string
+          competitor_id?: string
+          created_at?: string
+          fund_name?: string | null
+          fund_type_override?: string | null
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_cnpjs_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitors: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       statement_cache: {
         Row: {
           created_at: string
