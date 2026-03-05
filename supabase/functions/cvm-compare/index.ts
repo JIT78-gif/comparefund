@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await loadCompetitors();
     const { refMonth, fundType } = await req.json();
 
     if (!refMonth || refMonth.length !== 6) {

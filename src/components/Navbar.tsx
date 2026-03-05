@@ -12,6 +12,7 @@ const Navbar = () => {
     { path: "/", label: "DASHBOARD" },
     { path: "/compare", label: t("nav.compare").toUpperCase() },
     { path: "/statements", label: "DEMONSTRAÇÕES" },
+    { path: "/admin", label: "ADMIN" },
   ];
 
   const isActive = (path: string) => location.pathname === path;
