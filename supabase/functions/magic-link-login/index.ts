@@ -22,22 +22,6 @@ Deno.serve(async (req) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check whitelist
-    const { data: authorized, error: authError } = await supabase
-      .from("authorized_emails")
-      .select("id, status")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-
-    if (authError) throw authError;
-
-    if (!authorized || authorized.status !== "active") {
-      return new Response(
-        JSON.stringify({ error: "This email is not authorized to access the application." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Send magic link via OTP
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
