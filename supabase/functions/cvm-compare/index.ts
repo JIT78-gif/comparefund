@@ -40,7 +40,24 @@ function cleanCnpj(raw: string): string {
 
 function parseNum(val: string | undefined): number {
   if (!val) return 0;
-  return parseFloat(val.replace(/"/g, "").replace(",", ".")) || 0;
+  let cleaned = val.replace(/"/g, "").trim();
+  // Handle parentheses for negative numbers: (1234.56) -> -1234.56
+  const isNeg = cleaned.startsWith("(") && cleaned.endsWith(")");
+  if (isNeg) cleaned = cleaned.slice(1, -1);
+  // Replace comma decimal separator
+  cleaned = cleaned.replace(",", ".");
+  // Remove thousands separators (dots before the decimal dot)
+  const parts = cleaned.split(".");
+  if (parts.length > 2) {
+    const last = parts.pop()!;
+    cleaned = parts.join("") + "." + last;
+  }
+  const num = parseFloat(cleaned) || 0;
+  return isNeg ? -num : num;
+}
+
+function isValidCnpj(cnpj: string): boolean {
+  return /^\d{14}$/.test(cnpj);
 }
 
 function getCompany(cnpj: string): string | null {
@@ -123,7 +140,12 @@ Deno.serve(async (req) => {
     const fundUnitValues: Record<string, number> = {};
     const fundCash: Record<string, number> = {};
     const fundShareholders: Record<string, number> = {};
-    const fundCounts: Record<string, number> = { multiplica: 0, red: 0, atena: 0, cifra: 0 };
+
+    // Parse stats
+    let totalRowsParsed = 0;
+    let rowsMatched = 0;
+    let rowsSkippedInvalidCnpj = 0;
+    let anomaliesLogged = 0;
 
     const targetTables = ["tab_I", "tab_II", "tab_III", "tab_IV", "tab_V", "tab_VI", "tab_VII"];
 
@@ -151,119 +173,118 @@ Deno.serve(async (req) => {
       const isTabVII = filename.includes("tab_VII");
 
       if (isTabI) {
-        console.log(`tab_I headers: ${header.join(", ")}`);
         const nameIdx = header.indexOf("DENOM_SOCIAL");
         const dtCompetIdx = header.indexOf("DT_COMPTC");
         const tpFundoIdx = header.indexOf("TP_FUNDO") !== -1 ? header.indexOf("TP_FUNDO") : header.indexOf("TP_FUNDO_CLASSE");
         const condominioIdx = header.indexOf("CONDOM");
-        // Cash (disponibilidades) is in Tab I as TAB_I1_VL_DISP
         const dispIdx = header.indexOf("TAB_I1_VL_DISP");
-        if (dispIdx !== -1) console.log(`tab_I: found cash column TAB_I1_VL_DISP at index ${dispIdx}`);
         for (const row of rows) {
+          totalRowsParsed++;
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
+          if (!isValidCnpj(cnpj)) { rowsSkippedInvalidCnpj++; continue; }
           const company = getCompany(cnpj);
           if (!company) continue;
+          rowsMatched++;
           if (nameIdx !== -1) fundNames[cnpj] = row[nameIdx] || "";
           if (dtCompetIdx !== -1) fundPeriods[cnpj] = row[dtCompetIdx] || "";
 
-          // Extract cash from Tab I
           if (dispIdx !== -1) {
             const cashVal = parseNum(row[dispIdx]);
+            if (Math.abs(cashVal) > 1e12) { console.warn(`[anomaly] Cash ${cashVal} for ${cnpj}`); anomaliesLogged++; }
             fundCash[cnpj] = (fundCash[cnpj] || 0) + cashVal;
           }
 
           let detectedType = NP_OVERRIDE.has(cnpj) ? "NP" : "STANDARD";
           if (tpFundoIdx !== -1) {
             const tp = (row[tpFundoIdx] || "").toUpperCase();
-            if (tp.includes("NP") || tp.includes("NAO PADRONIZADO") || tp.includes("NÃO PADRONIZADO")) {
-              detectedType = "NP";
-            }
+            if (tp.includes("NP") || tp.includes("NAO PADRONIZADO") || tp.includes("NÃO PADRONIZADO")) detectedType = "NP";
           }
           if (condominioIdx !== -1) {
             const cond = (row[condominioIdx] || "").toUpperCase();
-            if (cond.includes("NP") || cond.includes("NAO PADRONIZADO") || cond.includes("NÃO PADRONIZADO")) {
-              detectedType = "NP";
-            }
+            if (cond.includes("NP") || cond.includes("NAO PADRONIZADO") || cond.includes("NÃO PADRONIZADO")) detectedType = "NP";
           }
           const name = (fundNames[cnpj] || "").toUpperCase();
-          if (name.includes("NAO PADRONIZADO") || name.includes("NÃO PADRONIZADO") || name.includes(" NP ") || name.endsWith(" NP")) {
-            detectedType = "NP";
-          }
+          if (name.includes("NAO PADRONIZADO") || name.includes("NÃO PADRONIZADO") || name.includes(" NP ") || name.endsWith(" NP")) detectedType = "NP";
           fundTypes[cnpj] = detectedType;
         }
       } else if (isTabIII) {
-        console.log(`tab_III headers: ${header.join(", ")}`);
-        const passivoIdx = header.findIndex(h =>
-          h.includes("VL_PASSIVO") || h.includes("VL_PATRIM_LIQ") || h.includes("PASSIVO")
-        );
+        const passivoIdx = header.findIndex(h => h.includes("VL_PASSIVO") || h.includes("VL_PATRIM_LIQ") || h.includes("PASSIVO"));
         if (passivoIdx !== -1) {
           for (const row of rows) {
+            totalRowsParsed++;
             const cnpj = cleanCnpj(row[cnpjIdx] || "");
+            if (!isValidCnpj(cnpj)) { rowsSkippedInvalidCnpj++; continue; }
             const company = getCompany(cnpj);
             if (!company) continue;
-            fundLiabilities[cnpj] = (fundLiabilities[cnpj] || 0) + parseNum(row[passivoIdx]);
+            rowsMatched++;
+            const val = parseNum(row[passivoIdx]);
+            if (Math.abs(val) > 1e12) { console.warn(`[anomaly] Liability ${val} for ${cnpj}`); anomaliesLogged++; }
+            fundLiabilities[cnpj] = (fundLiabilities[cnpj] || 0) + val;
           }
         }
       } else if (isTabIV) {
-        console.log(`tab_IV headers: ${header.join(", ")}`);
         const plIdx = header.indexOf("TAB_IV_A_VL_PL");
         const plMedioIdx = header.indexOf("TAB_IV_B_VL_PL_MEDIO");
         const nameIdx = header.indexOf("DENOM_SOCIAL");
         const dtIdx = header.indexOf("DT_COMPTC");
-        // Shareholders (cotistas) - search for NR_COTST or QT_COTST
-        const cotistasIdx = header.findIndex(h =>
-          h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("NR_COTISTA") || h.includes("COTST")
-        );
-        if (cotistasIdx !== -1) console.log(`tab_IV: found shareholders column ${header[cotistasIdx]} at index ${cotistasIdx}`);
-        else console.log(`tab_IV: no shareholders column found`);
+        const cotistasIdx = header.findIndex(h => h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("NR_COTISTA") || h.includes("COTST"));
         for (const row of rows) {
+          totalRowsParsed++;
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
+          if (!isValidCnpj(cnpj)) { rowsSkippedInvalidCnpj++; continue; }
           const company = getCompany(cnpj);
           if (!company) continue;
+          rowsMatched++;
           const pl = parseNum(row[plIdx]);
           const plMedio = plMedioIdx !== -1 ? parseNum(row[plMedioIdx]) : 0;
+          if (Math.abs(pl) > 1e12) { console.warn(`[anomaly] PL ${pl} for ${cnpj}`); anomaliesLogged++; }
           fundNetAssets[cnpj] = Math.max(fundNetAssets[cnpj] || 0, pl);
           if (nameIdx !== -1 && !fundNames[cnpj]) fundNames[cnpj] = row[nameIdx] || "";
           if (dtIdx !== -1 && !fundPeriods[cnpj]) fundPeriods[cnpj] = row[dtIdx] || "";
-          if (plMedio > 0 && pl > 0) {
-            fundUnitValues[cnpj] = ((pl - plMedio) / plMedio) * 100;
-          }
-          // Extract shareholders count
+          if (plMedio > 0 && pl > 0) fundUnitValues[cnpj] = ((pl - plMedio) / plMedio) * 100;
           if (cotistasIdx !== -1) {
             const val = parseNum(row[cotistasIdx]);
             fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
           }
-          fundCounts[company]++;
         }
       } else if (isTabII) {
         const cartIdx = header.indexOf("TAB_II_VL_CARTEIRA");
         for (const row of rows) {
+          totalRowsParsed++;
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
+          if (!isValidCnpj(cnpj)) { rowsSkippedInvalidCnpj++; continue; }
           const company = getCompany(cnpj);
           if (!company) continue;
-          fundPortfolio[cnpj] = Math.max(fundPortfolio[cnpj] || 0, parseNum(row[cartIdx]));
+          rowsMatched++;
+          const val = parseNum(row[cartIdx]);
+          if (Math.abs(val) > 1e12) { console.warn(`[anomaly] Portfolio ${val} for ${cnpj}`); anomaliesLogged++; }
+          fundPortfolio[cnpj] = Math.max(fundPortfolio[cnpj] || 0, val);
         }
       } else if (isTabV) {
-        // Tab V contains receivables aging data, not cash. Cash is in Tab I.
         console.log(`tab_V: skipping (receivables aging data)`);
       } else if (isTabVI) {
-        // Tab VI contains receivables aging data, not shareholders. Shareholders searched in Tab IV.
         console.log(`tab_VI: skipping (receivables aging data)`);
       } else if (isTabVII) {
         const overdueAdIdx = header.indexOf("TAB_VII_A3_2_VL_DIRCRED_VENC_AD");
         const overdueInadIdx = header.indexOf("TAB_VII_A4_2_VL_DIRCRED_VENC_INAD");
         const inadIdx = header.indexOf("TAB_VII_A5_2_VL_DIRCRED_INAD");
         for (const row of rows) {
+          totalRowsParsed++;
           const cnpj = cleanCnpj(row[cnpjIdx] || "");
+          if (!isValidCnpj(cnpj)) { rowsSkippedInvalidCnpj++; continue; }
           const company = getCompany(cnpj);
           if (!company) continue;
+          rowsMatched++;
           const ov = parseNum(row[overdueAdIdx]) + parseNum(row[overdueInadIdx]) + parseNum(row[inadIdx]);
+          if (Math.abs(ov) > 1e12) { console.warn(`[anomaly] Overdue ${ov} for ${cnpj}`); anomaliesLogged++; }
           fundOverdue[cnpj] = (fundOverdue[cnpj] || 0) + ov;
         }
       }
     }
 
-    // Fetch shareholders from CVM medidas dataset (separate from monthly report)
+    console.log(`[parse-stats] totalRows=${totalRowsParsed} matched=${rowsMatched} skippedInvalidCnpj=${rowsSkippedInvalidCnpj} anomalies=${anomaliesLogged}`);
+
+    // Fetch shareholders from CVM medidas dataset
     try {
       const medidasUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/medidas_mes_fie_${refMonth}.csv`;
       console.log(`Fetching medidas: ${medidasUrl}`);
@@ -273,10 +294,8 @@ Deno.serve(async (req) => {
         const medidasLines = medidasText.split("\n").filter(l => l.trim());
         if (medidasLines.length > 1) {
           const mHeader = medidasLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
-          console.log(`medidas headers: ${mHeader.join(", ")}`);
           const mCnpjIdx = mHeader.findIndex(h => h.includes("CNPJ"));
           const mCotistasIdx = mHeader.findIndex(h => h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("COTST"));
-          console.log(`medidas: CNPJ idx=${mCnpjIdx}, cotistas idx=${mCotistasIdx} (${mCotistasIdx >= 0 ? mHeader[mCotistasIdx] : 'not found'})`);
           if (mCnpjIdx !== -1 && mCotistasIdx !== -1) {
             for (let i = 1; i < medidasLines.length; i++) {
               const cols = medidasLines[i].split(";").map(c => c.trim().replace(/"/g, ""));
@@ -285,27 +304,21 @@ Deno.serve(async (req) => {
               if (!company) continue;
               const val = parseNum(cols[mCotistasIdx]);
               fundShareholders[cnpj] = Math.max(fundShareholders[cnpj] || 0, val);
-              console.log(`medidas: ${company} CNPJ ${cnpj} shareholders=${val}`);
             }
           }
         }
       } else {
-        console.log(`medidas: HTTP ${medidasRes.status} - trying historical format`);
-        // Try historical format
         const yearStr = refMonth.substring(0, 4);
         const histUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/HIST/medidas_fie_${yearStr}.csv`;
-        console.log(`Fetching historical medidas: ${histUrl}`);
         const histRes = await fetch(histUrl);
         if (histRes.ok) {
           const histText = await histRes.text();
           const histLines = histText.split("\n").filter(l => l.trim());
           if (histLines.length > 1) {
             const mHeader = histLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
-            console.log(`hist medidas headers: ${mHeader.join(", ")}`);
             const mCnpjIdx = mHeader.findIndex(h => h.includes("CNPJ"));
             const mCotistasIdx = mHeader.findIndex(h => h.includes("NR_COTST") || h.includes("QT_COTST") || h.includes("COTST"));
             const mDtIdx = mHeader.findIndex(h => h.includes("DT_COMPTC") || h.includes("DT_REFER"));
-            // Filter by refMonth
             const refDate = `${refMonth.substring(0, 4)}-${refMonth.substring(4, 6)}`;
             if (mCnpjIdx !== -1 && mCotistasIdx !== -1) {
               for (let i = 1; i < histLines.length; i++) {
@@ -319,8 +332,6 @@ Deno.serve(async (req) => {
               }
             }
           }
-        } else {
-          console.log(`hist medidas: HTTP ${histRes.status}`);
         }
       }
     } catch (medidasErr) {
@@ -373,9 +384,7 @@ Deno.serve(async (req) => {
       r.shareholders += d.shareholders;
       r.fund_count++;
       r.fund_type = d.fund_type;
-      if (fundUnitValues[d.cnpj]) {
-        r.unit_value = fundUnitValues[d.cnpj];
-      }
+      if (fundUnitValues[d.cnpj]) r.unit_value = fundUnitValues[d.cnpj];
     }
 
     for (const key of Object.keys(results)) {

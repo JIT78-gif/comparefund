@@ -45,7 +45,21 @@ function cleanCnpj(raw: string): string {
 
 function parseNum(val: string | undefined): number {
   if (!val) return 0;
-  return parseFloat(val.replace(/"/g, "").replace(",", ".")) || 0;
+  let cleaned = val.replace(/"/g, "").trim();
+  const isNeg = cleaned.startsWith("(") && cleaned.endsWith(")");
+  if (isNeg) cleaned = cleaned.slice(1, -1);
+  cleaned = cleaned.replace(",", ".");
+  const parts = cleaned.split(".");
+  if (parts.length > 2) {
+    const last = parts.pop()!;
+    cleaned = parts.join("") + "." + last;
+  }
+  const num = parseFloat(cleaned) || 0;
+  return isNeg ? -num : num;
+}
+
+function isValidCnpj(cnpj: string): boolean {
+  return /^\d{14}$/.test(cnpj);
 }
 
 function getCompany(cnpj: string): string | null {
