@@ -1,1 +1,7 @@
 project_id = "shdmcrozknktngheopik"
+
+[functions.magic-link-login]
+verify_jwt = false
+
+[functions.competitor-admin]
+verify_jwt = false
