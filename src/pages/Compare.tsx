@@ -375,7 +375,7 @@ const Compare = () => {
             <div className="border border-border rounded-sm overflow-x-auto mb-8">
               <table className="w-full text-sm md:text-base">
                 <thead>
-                  <tr className="bg-muted/40">
+                  <tr className="bg-grid-header">
                     {[t("compare.col.company"), t("compare.col.pl"), t("compare.col.receivables"), t("compare.col.cash"), t("compare.col.shareholders"), t("compare.col.delinq"), t("compare.col.unitvar"), t("compare.col.subordination"), t("compare.col.type")].map((h) => (
                       <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
                         {h}
