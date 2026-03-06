@@ -44,17 +44,17 @@ const Login = () => {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-bold text-3xl text-foreground mb-1">
+          <h1 className="font-display font-extrabold text-3xl text-foreground mb-1">
             FIDC<span className="text-primary">.</span>Intel
           </h1>
           <p className="text-muted-foreground text-sm">Acesso restrito por convite</p>
         </div>
 
-        <div className="border border-border/60 rounded-md p-8 bg-card">
+        <div className="border border-border rounded-md p-8 bg-card">
           {sent ? (
             <div className="text-center space-y-4">
               <CheckCircle className="h-12 w-12 text-primary mx-auto" />
-              <h2 className="font-bold text-xl text-foreground">Link enviado!</h2>
+              <h2 className="font-display font-bold text-xl text-foreground">Link enviado!</h2>
               <p className="text-muted-foreground text-sm">
                 Verifique sua caixa de entrada em <strong className="text-foreground">{email}</strong> e clique no link para entrar.
               </p>
@@ -70,7 +70,7 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="flex items-center gap-3 mb-2">
                 <Mail className="h-5 w-5 text-primary" />
-                <h2 className="font-bold text-lg text-foreground">Entrar com email</h2>
+                <h2 className="font-display font-bold text-lg text-foreground">Entrar com email</h2>
               </div>
               <p className="text-muted-foreground text-sm">
                 Insira seu email autorizado para receber um link de acesso.
