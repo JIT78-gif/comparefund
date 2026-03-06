@@ -40,21 +40,21 @@ interface FundDetail {
 type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
 
 const CHART_COLORS = [
-  "hsl(152, 100%, 45%)", // Green
-  "hsl(215, 60%, 15%)",  // Dark Blue
-  "hsl(210, 40%, 96%)",  // White/Grey
-  "hsl(359, 100%, 65%)", // Red
-  "hsl(45, 100%, 50%)",  // Yellow
-  "hsl(280, 80%, 55%)",  // Purple
+  "hsl(var(--chart-1))",  // cyan — primary
+  "hsl(var(--chart-2))",  // light blue
+  "hsl(var(--chart-3))",  // slate
+  "hsl(var(--chart-4))",  // mid-grey
+  "hsl(var(--chart-5))",  // dark-grey
+  "hsl(280, 60%, 65%)",   // purple — extra
 ];
 
 const BG_COLORS = [
   "bg-primary",
-  "bg-[#0b1b36]",
-  "bg-[#e2e8f0]",
-  "bg-[#ff4d4f]",
-  "bg-[#eab308]",
-  "bg-[#a855f7]",
+  "bg-muted",
+  "bg-secondary",
+  "bg-destructive",
+  "bg-accent",
+  "bg-ring",
 ];
 
 const Compare = () => {
@@ -142,13 +142,13 @@ const Compare = () => {
     : [];
 
   const tooltipStyle = {
-    background: "hsl(228 20% 7%)",
-    border: "1px solid hsl(230 20% 15%)",
+    background: "hsl(var(--card))",
+    border: "1px solid hsl(var(--border))",
     borderRadius: 4,
-    color: "hsl(225 30% 93%)",
+    color: "hsl(var(--foreground))",
   };
-  const labelStyle = { color: "hsl(225 30% 93%)" };
-  const itemStyle = { color: "hsl(225 30% 93%)" };
+  const labelStyle = { color: "hsl(var(--foreground))" };
+  const itemStyle = { color: "hsl(var(--muted-foreground))" };
 
   return (
     <div className="min-h-screen bg-background">
@@ -156,13 +156,13 @@ const Compare = () => {
       <div className="pt-24 px-6 md:px-[60px] max-w-[1400px] mx-auto pb-20">
         {/* Header */}
         <div className="mb-10">
-          <span className="inline-block border border-primary/30 text-primary text-xs tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
+          <span className="inline-block text-primary text-xs tracking-[3px] uppercase mb-4 font-mono">
             {t("compare.badge")}
           </span>
-          <h1 className="font-display font-extrabold text-3xl md:text-6xl tracking-tight leading-[0.95] mb-4">
+          <h1 className="font-bold text-2xl text-foreground tracking-tight leading-[0.95] mb-4">
             {t("compare.title")}
           </h1>
-          <p className="font-serif font-light text-muted-foreground text-base md:text-lg max-w-xl leading-relaxed">
+          <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
             {t("compare.subtitle")}
           </p>
         </div>
@@ -288,9 +288,9 @@ const Compare = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
               <ChartCard title={t("compare.chart.pl")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "PL"]} />
                   <Bar dataKey="assets" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -302,9 +302,9 @@ const Compare = () => {
 
               <ChartCard title={t("compare.chart.delinq")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Inadimplência"]} />
                   <Bar dataKey="delinquency" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -316,9 +316,9 @@ const Compare = () => {
 
               <ChartCard title={t("compare.chart.unit")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatPercent(value), "Cota"]} />
                   <Bar dataKey="unitVar" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -330,9 +330,9 @@ const Compare = () => {
 
               <ChartCard title={t("compare.chart.receivables")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Recebíveis"]} />
                   <Bar dataKey="receivables" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -344,9 +344,9 @@ const Compare = () => {
 
               <ChartCard title={t("compare.chart.cash")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatCurrency(value), "Caixa"]} />
                   <Bar dataKey="cash" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -358,9 +358,9 @@ const Compare = () => {
 
               <ChartCard title={t("compare.chart.shareholders")}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
-                  <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
-                  <YAxis tick={{ fill: "hsl(220 15% 58%)", fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
                   <Tooltip contentStyle={tooltipStyle} labelStyle={labelStyle} itemStyle={itemStyle} formatter={(value: number) => [formatNumber(value), "Cotistas"]} />
                   <Bar dataKey="shareholders" radius={[3, 3, 0, 0]}>
                     {chartData.map((_, index) => (
@@ -377,7 +377,7 @@ const Compare = () => {
                 <thead>
                   <tr className="bg-muted/40">
                     {[t("compare.col.company"), t("compare.col.pl"), t("compare.col.receivables"), t("compare.col.cash"), t("compare.col.shareholders"), t("compare.col.delinq"), t("compare.col.unitvar"), t("compare.col.subordination"), t("compare.col.type")].map((h) => (
-                      <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
+                      <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -389,7 +389,7 @@ const Compare = () => {
                       <td className="p-3 md:p-4">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${row.color}`} />
-                          <span className="font-display font-semibold text-foreground">{row.name}</span>
+                          <span className="font-semibold text-foreground">{row.name}</span>
                         </div>
                       </td>
                       <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
@@ -431,7 +431,7 @@ const Compare = () => {
             {/* Fund Details */}
             {data.details && data.details.length > 0 && (
               <div>
-                <h3 className="font-display text-xs tracking-[3px] uppercase text-muted-foreground mb-4">
+                <h3 className="text-xs tracking-[3px] uppercase text-muted-foreground mb-4 font-semibold">
                   {t("compare.fundDetails")}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -439,7 +439,7 @@ const Compare = () => {
                     <div key={d.cnpj} className="border border-border bg-card rounded-sm p-5">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <p className="font-display font-semibold text-sm text-foreground leading-tight mb-1">
+                          <p className="font-semibold text-sm text-foreground leading-tight mb-1">
                             {d.fund_name}
                           </p>
                           <p className="text-xs text-muted-foreground font-mono">
@@ -479,7 +479,7 @@ const Compare = () => {
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border border-border bg-card p-5 rounded-sm">
-      <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5">
+      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5 font-semibold">
         {title}
       </h3>
       <ResponsiveContainer width="100%" height={280}>
