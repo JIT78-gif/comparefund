@@ -29,6 +29,22 @@ interface CvmSearchResult {
   condom: string;
 }
 
+interface ManagerFund {
+  cnpj: string;
+  name: string;
+  admin: string;
+  gestor: string;
+  cnpj_gestor: string;
+  tp_fundo: string;
+  sit: string;
+}
+
+interface ManagerGroup {
+  name: string;
+  cnpj: string;
+  funds: ManagerFund[];
+}
+
 interface UserWithRoles {
   id: string;
   email: string;
@@ -58,12 +74,17 @@ const Admin = () => {
   const [newEmail, setNewEmail] = useState("");
 
   // CVM Search
+  const [cvmSearchSource, setCvmSearchSource] = useState<"monthly" | "manager">("monthly");
   const [cvmSearchQuery, setCvmSearchQuery] = useState("");
   const [cvmSearchField, setCvmSearchField] = useState("ALL");
   const [cvmSearchMonth, setCvmSearchMonth] = useState("202412");
   const [cvmResults, setCvmResults] = useState<CvmSearchResult[]>([]);
   const [cvmSearching, setCvmSearching] = useState(false);
   const [cvmAddTarget, setCvmAddTarget] = useState("");
+
+  // Manager search results
+  const [managerResults, setManagerResults] = useState<ManagerGroup[]>([]);
+  const [managerTotalFunds, setManagerTotalFunds] = useState(0);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ["competitors"],
@@ -93,7 +114,6 @@ const Admin = () => {
       invokeCompetitorAdmin(args.action, args.payload),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["competitors"] });
-      // Purge statements cache when competitors or CNPJs change
       if (variables.action.includes("cnpj") || variables.action.includes("competitor")) {
         queryClient.invalidateQueries({ queryKey: ["cvm-statements"] });
       }
@@ -161,21 +181,44 @@ const Admin = () => {
     if (!cvmSearchQuery.trim()) return;
     setCvmSearching(true);
     setCvmResults([]);
+    setManagerResults([]);
+    setManagerTotalFunds(0);
+
     try {
-      const isCnpjSearch = /^\d{2,14}$/.test(cvmSearchQuery.replace(/[.\-\/]/g, ""));
-      const body: Record<string, unknown> = { refMonth: cvmSearchMonth, limit: 50 };
-      if (isCnpjSearch) {
-        body.searchCnpjs = [cvmSearchQuery];
-        body.searchTerms = [];
+      if (cvmSearchSource === "manager") {
+        // Manager registry search
+        const isCnpjSearch = /^\d{2,14}$/.test(cvmSearchQuery.replace(/[.\-\/]/g, ""));
+        const body: Record<string, unknown> = { limit: 200 };
+        if (isCnpjSearch) {
+          body.searchCnpjs = [cvmSearchQuery];
+          body.searchTerms = [];
+        } else {
+          body.searchTerms = [cvmSearchQuery];
+        }
+        const { data, error } = await supabase.functions.invoke("cvm-manager-search", { body });
+        if (error) throw error;
+        setManagerResults(data?.managers || []);
+        setManagerTotalFunds(data?.total_funds || 0);
+        if ((data?.managers || []).length === 0) {
+          toast({ title: "No results", description: "No managers/funds found matching your search." });
+        }
       } else {
-        body.searchTerms = [cvmSearchQuery];
-        body.searchField = cvmSearchField;
-      }
-      const { data, error } = await supabase.functions.invoke("cvm-discover", { body });
-      if (error) throw error;
-      setCvmResults(data?.matches || []);
-      if ((data?.matches || []).length === 0) {
-        toast({ title: "No results", description: "No funds found matching your search." });
+        // Existing monthly data search
+        const isCnpjSearch = /^\d{2,14}$/.test(cvmSearchQuery.replace(/[.\-\/]/g, ""));
+        const body: Record<string, unknown> = { refMonth: cvmSearchMonth, limit: 50 };
+        if (isCnpjSearch) {
+          body.searchCnpjs = [cvmSearchQuery];
+          body.searchTerms = [];
+        } else {
+          body.searchTerms = [cvmSearchQuery];
+          body.searchField = cvmSearchField;
+        }
+        const { data, error } = await supabase.functions.invoke("cvm-discover", { body });
+        if (error) throw error;
+        setCvmResults(data?.matches || []);
+        if ((data?.matches || []).length === 0) {
+          toast({ title: "No results", description: "No funds found matching your search." });
+        }
       }
     } catch (err) {
       toast({ title: "Search failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
@@ -200,6 +243,46 @@ const Admin = () => {
       },
     });
     toast({ title: "CNPJ added", description: `${cleanCnpj} added to competitor` });
+  };
+
+  const handleAddManagerFund = (fund: ManagerFund) => {
+    if (!cvmAddTarget) {
+      toast({ title: "Select a competitor first", description: "Choose which competitor to add this CNPJ to.", variant: "destructive" });
+      return;
+    }
+    const cleanCnpj = fund.cnpj.replace(/[.\-\/]/g, "");
+    mutation.mutate({
+      action: "add_cnpj",
+      payload: {
+        competitor_id: cvmAddTarget,
+        cnpj: cleanCnpj,
+        fund_name: fund.name || null,
+        fund_type_override: fund.tp_fundo?.includes("NP") ? "NP" : null,
+      },
+    });
+    toast({ title: "CNPJ added", description: `${cleanCnpj} added to competitor` });
+  };
+
+  const handleAddAllManagerFunds = (funds: ManagerFund[]) => {
+    if (!cvmAddTarget) {
+      toast({ title: "Select a competitor first", description: "Choose which competitor to add these CNPJs to.", variant: "destructive" });
+      return;
+    }
+    let count = 0;
+    for (const fund of funds) {
+      const cleanCnpj = fund.cnpj.replace(/[.\-\/]/g, "");
+      mutation.mutate({
+        action: "add_cnpj",
+        payload: {
+          competitor_id: cvmAddTarget,
+          cnpj: cleanCnpj,
+          fund_name: fund.name || null,
+          fund_type_override: fund.tp_fundo?.includes("NP") ? "NP" : null,
+        },
+      });
+      count++;
+    }
+    toast({ title: `${count} CNPJs added`, description: `Added all funds to competitor` });
   };
 
   const formatCnpj = (cnpj: string) => {
@@ -347,36 +430,66 @@ const Admin = () => {
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Search CVM Database</h3>
               </div>
+
+              {/* Search source toggle */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => { setCvmSearchSource("monthly"); setCvmResults([]); setManagerResults([]); }}
+                  className={`px-3 py-1.5 text-xs font-mono tracking-wider uppercase rounded-sm border transition-colors ${
+                    cvmSearchSource === "monthly"
+                      ? "bg-primary/10 border-primary text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Informe Mensal
+                </button>
+                <button
+                  onClick={() => { setCvmSearchSource("manager"); setCvmResults([]); setManagerResults([]); }}
+                  className={`px-3 py-1.5 text-xs font-mono tracking-wider uppercase rounded-sm border transition-colors ${
+                    cvmSearchSource === "manager"
+                      ? "bg-primary/10 border-primary text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Cadastro por Gestora
+                </button>
+              </div>
+
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <Input
-                  placeholder="Fund name or CNPJ..."
+                  placeholder={cvmSearchSource === "manager" ? "Manager name or CNPJ..." : "Fund name or CNPJ..."}
                   value={cvmSearchQuery}
                   onChange={(e) => setCvmSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCvmSearch()}
                   className="flex-1"
                 />
-                <Select value={cvmSearchField} onValueChange={setCvmSearchField}>
-                  <SelectTrigger className="w-[130px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All fields</SelectItem>
-                    <SelectItem value="NAME">Name only</SelectItem>
-                    <SelectItem value="ADMIN">Admin only</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder="YYYYMM"
-                  value={cvmSearchMonth}
-                  onChange={(e) => setCvmSearchMonth(e.target.value)}
-                  className="w-[100px]"
-                />
+                {cvmSearchSource === "monthly" && (
+                  <>
+                    <Select value={cvmSearchField} onValueChange={setCvmSearchField}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All fields</SelectItem>
+                        <SelectItem value="NAME">Name only</SelectItem>
+                        <SelectItem value="ADMIN">Admin only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder="YYYYMM"
+                      value={cvmSearchMonth}
+                      onChange={(e) => setCvmSearchMonth(e.target.value)}
+                      className="w-[100px]"
+                    />
+                  </>
+                )}
                 <Button onClick={handleCvmSearch} disabled={cvmSearching || !cvmSearchQuery.trim()} size="sm">
                   {cvmSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
                 </Button>
               </div>
 
-              {cvmResults.length > 0 && (
+              {/* Monthly data results (existing) */}
+              {cvmSearchSource === "monthly" && cvmResults.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-muted-foreground">{cvmResults.length} results — Add to:</span>
@@ -426,6 +539,84 @@ const Admin = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* Manager search results */}
+              {cvmSearchSource === "manager" && managerResults.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-muted-foreground">
+                      {managerTotalFunds} funds from {managerResults.length} manager{managerResults.length > 1 ? "s" : ""} — Add to:
+                    </span>
+                    <Select value={cvmAddTarget} onValueChange={setCvmAddTarget}>
+                      <SelectTrigger className="w-[200px] h-8 text-xs">
+                        <SelectValue placeholder="Select competitor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {competitors.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {managerResults.map((mgr, idx) => (
+                    <div key={idx} className="mb-4">
+                      <div className="flex items-center justify-between mb-1 px-1">
+                        <div>
+                          <span className="text-sm font-semibold text-foreground">{mgr.name}</span>
+                          {mgr.cnpj && (
+                            <span className="text-xs text-muted-foreground ml-2 font-mono">{formatCnpj(mgr.cnpj)}</span>
+                          )}
+                          <Badge variant="outline" className="ml-2 text-[10px]">{mgr.funds.length} funds</Badge>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => handleAddAllManagerFunds(mgr.funds)}
+                        >
+                          <Plus className="h-3 w-3" /> Add All
+                        </Button>
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto border border-border rounded">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-muted/50">
+                            <tr>
+                              <th className="text-left p-2 text-muted-foreground">CNPJ</th>
+                              <th className="text-left p-2 text-muted-foreground">Fund Name</th>
+                              <th className="text-left p-2 text-muted-foreground">Type</th>
+                              <th className="text-left p-2 text-muted-foreground">Status</th>
+                              <th className="p-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {mgr.funds.map((f) => (
+                              <tr key={f.cnpj} className="border-t border-border/50 hover:bg-muted/10">
+                                <td className="p-2 font-mono">{formatCnpj(f.cnpj)}</td>
+                                <td className="p-2 max-w-[300px] truncate" title={f.name}>{f.name}</td>
+                                <td className="p-2">
+                                  {f.tp_fundo && <Badge variant="outline" className="text-[10px]">{f.tp_fundo}</Badge>}
+                                </td>
+                                <td className="p-2 text-muted-foreground">{f.sit}</td>
+                                <td className="p-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-primary hover:text-primary"
+                                    onClick={() => handleAddManagerFund(f)}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" /> Add
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
