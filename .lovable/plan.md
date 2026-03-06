@@ -1,38 +1,50 @@
 
 
-## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
+## Full Website Visual Redesign
 
-### Problem
-The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
+Styling-only changes across all pages to match the reference dark financial dashboard aesthetic. No logic or function changes.
 
-```typescript
-const isVirtual = account.id.startsWith("_");
-const value = isVirtual ? 0 : getValue(col.key, account.id);
-```
+### 1. Global Styles (`src/index.css`)
+- Darken the dark mode background to near-black (`hsl(225, 25%, 6%)`)
+- Adjust card backgrounds to darker navy (`hsl(225, 25%, 8%)`)
+- Refine border colors to subtle dark blue-green tints
+- Keep existing primary green `hsl(145, 100%, 42%)`
 
-All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
+### 2. StatementTreeGrid (`src/components/StatementTreeGrid.tsx`)
+- **Sticky columns**: Make Code + Description columns sticky (`sticky left-0`, `sticky left-[120px]`) with `z-10` and opaque backgrounds
+- **Header row**: Dark green-tinted background (`bg-[#0d2818]`)
+- **Top-level rows**: Stronger green tint (`bg-[#0a2a15]`)
+- **Sub-parent rows**: Subtle green (`bg-[#0d1f14]`)
+- **Leaf rows**: Near-transparent with hover
+- **Borders**: More visible grid lines, outer border with cyan accent
+- Column headers show `(R$)` suffix for currency columns
 
-### Changes
+### 3. Navbar (`src/components/Navbar.tsx`)
+- Darken background to match new base (`bg-[#0a0f1a]/95`)
+- Ensure backdrop blur works with new darker palette
 
-**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
-- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
+### 4. Login Page (`src/pages/Login.tsx`)
+- Darken card and background to match new palette
+- Input fields get darker background (`bg-[#0d1520]`)
 
-**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
-- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
-- For rate columns (Tab IX), compute average instead of sum
-- Pass the tree structure to look up children
+### 5. Compare Page (`src/pages/Compare.tsx`)
+- Controls card: darker background
+- Chart cards: darker background with subtle border
+- Table: match same dark green-tinted header style as StatementTreeGrid
 
-**3. `src/components/Navbar.tsx`** — Add missing nav link
-- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
-- Rename "HOME" to "DASHBOARD"
+### 6. Admin Page (`src/pages/Admin.tsx`)
+- Tab bar, cards, dialogs: match darker palette
+- Tables: consistent header styling with green tint
 
-**4. `src/index.css`** — Switch body font
-- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
-- Keep `font-mono` utility class for numeric table cells only
+### 7. ChartPanel (`src/components/ChartPanel.tsx`)
+- Card background: match new card color
+- Border styling consistency
 
-### Files
-- `src/lib/account-tree.ts` — add child lookup helper
-- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
-- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
-- `src/index.css` — change body font to Inter
+### 8. MetricCard (`src/components/MetricCard.tsx`)
+- Darker card background to match new palette
+
+### Scope
+- **CSS/class changes only** across ~8 files
+- Zero logic, data, or function changes
+- All features (charts, admin, auth, compare) remain fully functional
 
