@@ -96,6 +96,9 @@ const Admin = () => {
       if (variables.action.includes("authorized_email")) {
         queryClient.invalidateQueries({ queryKey: ["authorized_emails"] });
       }
+      if (variables.action.includes("user_role")) {
+        queryClient.invalidateQueries({ queryKey: ["admin_users"] });
+      }
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
