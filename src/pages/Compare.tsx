@@ -159,10 +159,10 @@ const Compare = () => {
           <span className="inline-block border border-primary/30 text-primary text-xs tracking-[3px] uppercase px-3 py-1 rounded-sm mb-4 font-mono">
             {t("compare.badge")}
           </span>
-          <h1 className="font-display font-extrabold text-3xl md:text-6xl tracking-tight leading-[0.95] mb-4">
+          <h1 className="font-bold text-2xl md:text-3xl tracking-tight leading-tight mb-4 text-foreground">
             {t("compare.title")}
           </h1>
-          <p className="font-serif font-light text-muted-foreground text-base md:text-lg max-w-xl leading-relaxed">
+          <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
             {t("compare.subtitle")}
           </p>
         </div>
@@ -377,7 +377,7 @@ const Compare = () => {
                 <thead>
                   <tr className="bg-muted/40">
                     {[t("compare.col.company"), t("compare.col.pl"), t("compare.col.receivables"), t("compare.col.cash"), t("compare.col.shareholders"), t("compare.col.delinq"), t("compare.col.unitvar"), t("compare.col.subordination"), t("compare.col.type")].map((h) => (
-                      <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-display whitespace-nowrap">
+                      <th key={h} className="text-left p-3 md:p-4 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -389,7 +389,7 @@ const Compare = () => {
                       <td className="p-3 md:p-4">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${row.color}`} />
-                          <span className="font-display font-semibold text-foreground">{row.name}</span>
+                          <span className="font-semibold text-foreground">{row.name}</span>
                         </div>
                       </td>
                       <td className="p-3 md:p-4 text-foreground font-mono whitespace-nowrap">{formatCurrency(row.net_assets)}</td>
@@ -431,7 +431,7 @@ const Compare = () => {
             {/* Fund Details */}
             {data.details && data.details.length > 0 && (
               <div>
-                <h3 className="font-display text-xs tracking-[3px] uppercase text-muted-foreground mb-4">
+                <h3 className="text-xs tracking-[3px] uppercase text-muted-foreground mb-4 font-semibold">
                   {t("compare.fundDetails")}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -439,7 +439,7 @@ const Compare = () => {
                     <div key={d.cnpj} className="border border-border bg-card rounded-sm p-5">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <p className="font-display font-semibold text-sm text-foreground leading-tight mb-1">
+                          <p className="font-semibold text-sm text-foreground leading-tight mb-1">
                             {d.fund_name}
                           </p>
                           <p className="text-xs text-muted-foreground font-mono">
@@ -479,7 +479,7 @@ const Compare = () => {
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border border-border bg-card p-5 rounded-sm">
-      <h3 className="font-display text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5">
+      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5 font-semibold">
         {title}
       </h3>
       <ResponsiveContainer width="100%" height={280}>

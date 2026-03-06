@@ -25,7 +25,7 @@ const MetricCard = ({ icon, label, value, subtitle, color = "green" }: MetricCar
         </p>
       </div>
       <div className="mt-4">
-        <p className={`font-scifi font-black italic text-2xl md:text-[32px] tracking-widest ${colorMap[color]}`}>
+        <p className={`font-mono font-bold text-2xl md:text-[32px] tracking-wide ${colorMap[color]}`}>
           {value}
         </p>
         <p className="text-[11px] md:text-xs text-muted-foreground mt-2 font-mono">

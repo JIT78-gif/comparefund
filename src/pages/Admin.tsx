@@ -223,7 +223,7 @@ const Admin = () => {
         <main className="pt-24 px-4 md:px-[60px] max-w-[600px] mx-auto">
           <div className="border border-border rounded-md p-8 bg-card text-center">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h1 className="font-display font-extrabold text-2xl text-foreground mb-2">Access Denied</h1>
+            <h1 className="font-bold text-2xl text-foreground mb-2">Access Denied</h1>
             <p className="text-muted-foreground text-sm">You need admin privileges to access this page.</p>
           </div>
         </main>
@@ -236,7 +236,7 @@ const Admin = () => {
       <Navbar />
       <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground">
+          <h1 className="font-bold text-2xl sm:text-3xl text-foreground">
             Admin Panel
           </h1>
         </div>
