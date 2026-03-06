@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
       email: normalizedEmail,
       options: {
         shouldCreateUser: true,
+        emailRedirectTo: "http://localhost:8080",
       },
     });
 

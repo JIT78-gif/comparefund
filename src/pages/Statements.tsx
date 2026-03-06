@@ -239,7 +239,7 @@ const Statements = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
-        <h1 className="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-foreground mb-8">
+        <h1 className="font-bold text-2xl sm:text-3xl md:text-4xl text-foreground mb-8">
           {t("statements.title")}
         </h1>
 
@@ -248,9 +248,8 @@ const Statements = () => {
           <div className="flex gap-8">
             <button
               onClick={() => setMode("companies")}
-              className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
-                mode === "companies" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`relative pb-3 text-sm font-semibold tracking-tight transition-colors ${mode === "companies" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               {t("statements.compareCompanies")}
               {mode === "companies" && (
@@ -259,9 +258,8 @@ const Statements = () => {
             </button>
             <button
               onClick={() => setMode("periods")}
-              className={`relative pb-3 text-sm font-display font-semibold tracking-tight transition-colors ${
-                mode === "periods" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`relative pb-3 text-sm font-semibold tracking-tight transition-colors ${mode === "periods" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               {t("statements.comparePeriods")}
               {mode === "periods" && (

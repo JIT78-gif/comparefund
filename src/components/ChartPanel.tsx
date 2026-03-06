@@ -19,16 +19,16 @@ interface ChartPanelProps {
 }
 
 const PALETTE = [
-  "hsl(var(--chart-1))",      // cyan — primary brand
-  "hsl(var(--chart-2))",      // light blue
-  "hsl(var(--chart-3))",      // slate
-  "hsl(var(--chart-4))",      // mid-grey
-  "hsl(var(--chart-5))",      // dark-grey
-  "hsl(152, 70%, 50%)",       // green — readable on dark bg
-  "hsl(280, 60%, 65%)",       // purple
-  "hsl(38, 85%, 55%)",        // amber
-  "hsl(350, 70%, 60%)",       // rose
-  "hsl(195, 80%, 55%)",       // sky
+  "hsl(200, 98%, 39%)",
+  "hsl(145, 100%, 42%)",
+  "hsl(0, 72%, 50%)",
+  "hsl(38, 92%, 50%)",
+  "hsl(280, 65%, 60%)",
+  "hsl(180, 70%, 45%)",
+  "hsl(330, 80%, 55%)",
+  "hsl(55, 90%, 50%)",
+  "hsl(210, 70%, 60%)",
+  "hsl(15, 85%, 55%)",
 ];
 
 const brFmt = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -210,7 +210,7 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
   };
 
   return (
-    <div className="mt-8 rounded-sm border border-border bg-card p-6">
+    <div className="mt-8 rounded-lg border border-[hsl(var(--table-accent)_/_0.3)] bg-card p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-lg text-foreground">
           Gráfico ({selectedAccounts.size} {selectedAccounts.size === 1 ? "conta" : "contas"})

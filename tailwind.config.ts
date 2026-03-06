@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 export default {
-	darkMode: ["class"],
 	content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
 	prefix: "",
 	theme: {
@@ -15,13 +14,12 @@ export default {
 		extend: {
 			fontFamily: {
 				display: [
-					'Syne',
+					'Inter',
 					'sans-serif'
 				],
 				scifi: [
-					'Orbitron',
-					'Syncopate',
-					'sans-serif'
+					'Space Mono',
+					'monospace'
 				],
 				mono: [
 					'Space Mono',
@@ -35,13 +33,8 @@ export default {
 					'monospace'
 				],
 				serif: [
-					'Lora',
-					'ui-serif',
-					'Georgia',
-					'Cambria',
-					'Times New Roman',
-					'Times',
-					'serif'
+					'Inter',
+					'sans-serif'
 				],
 				sans: [
 					'Inter',
