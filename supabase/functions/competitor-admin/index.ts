@@ -146,6 +146,10 @@ Deno.serve(async (req) => {
         .select()
         .single();
       if (error) throw error;
+      // Purge statement cache when CNPJ status changes
+      if (status) {
+        await supabaseAdmin.from("statement_cache").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      }
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
