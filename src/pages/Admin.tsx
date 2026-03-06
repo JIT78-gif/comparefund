@@ -251,6 +251,12 @@ const Admin = () => {
           >
             <Users className="h-4 w-4 inline mr-2" />Authorized Emails
           </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "users" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
+          >
+            <UserCog className="h-4 w-4 inline mr-2" />Users & Roles
+          </button>
         </div>
 
         {/* Authorized Emails Tab */}
