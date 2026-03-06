@@ -210,7 +210,7 @@ const ChartPanel = ({ selectedAccounts, columns, getValue }: ChartPanelProps) =>
   };
 
   return (
-    <div className="mt-8 rounded-lg border border-primary/30 bg-card p-6">
+    <div className="mt-8 rounded-lg border border-[hsl(var(--table-accent)_/_0.3)] bg-card p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-lg text-foreground">
           Gráfico ({selectedAccounts.size} {selectedAccounts.size === 1 ? "conta" : "contas"})

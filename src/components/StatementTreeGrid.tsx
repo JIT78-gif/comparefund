@@ -126,10 +126,10 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
         </div>
       </div>
 
-      <div className="relative w-full overflow-auto rounded-lg border border-primary/30">
+      <div className="relative w-full overflow-auto rounded-lg border border-[hsl(var(--table-accent)_/_0.4)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-grid-header border-b-2 border-b-primary/50">
+            <tr className="bg-grid-header border-b-2 border-b-[hsl(var(--table-accent)_/_0.4)]">
               <th className="sticky left-0 z-20 bg-grid-header text-left py-3 px-4 font-display font-semibold text-foreground min-w-[120px] border-r border-border/50">
                 {t("grid.code")}
               </th>
@@ -194,7 +194,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
                       {isParent && (
                         <button
                           onClick={() => toggleExpand(account.id)}
-                          className="text-primary hover:text-primary/80 transition-colors text-sm leading-none"
+                          className="text-[hsl(var(--table-accent))] hover:text-[hsl(var(--table-accent)_/_0.7)] transition-colors text-sm leading-none"
                         >
                           {isExpanded ? "▼" : "▶"}
                         </button>
