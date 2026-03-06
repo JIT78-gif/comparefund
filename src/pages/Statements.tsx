@@ -97,20 +97,8 @@ const Statements = () => {
   );
 
   const [mode, setMode] = useState<CompareMode>("companies");
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
-  const [singleCompany, setSingleCompany] = useState("");
-
-  // Sync selectedCompanies with available COMPANIES list
-  useEffect(() => {
-    if (COMPANIES.length === 0) return;
-    const validKeys = new Set(COMPANIES.map((c) => c.key));
-    setSelectedCompanies((prev) => {
-      const filtered = prev.filter((k) => validKeys.has(k));
-      // If nothing selected yet (initial load), select all
-      return filtered.length > 0 ? filtered : COMPANIES.map((c) => c.key);
-    });
-    setSingleCompany((prev) => validKeys.has(prev) ? prev : COMPANIES[0]?.key || "");
-  }, [COMPANIES]);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["multiplica", "red"]);
+  const [singleCompany, setSingleCompany] = useState("multiplica");
   const [fundType, setFundType] = useState("STANDARD");
   const [selectedCnpjs, setSelectedCnpjs] = useState<Set<string>>(new Set());
 
