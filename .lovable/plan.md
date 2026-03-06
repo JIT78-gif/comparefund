@@ -1,29 +1,38 @@
 
 
-## Plan: Invalidate statement cache when admin adds/removes funds
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
 ### Problem
-When an admin adds or removes a CNPJ in the Admin panel, the `statement_cache` table still holds stale parsed data. The `cvm-statements` function serves cached results that don't reflect the updated competitor list — so new funds don't appear and removed funds persist.
-
-### Solution
-Invalidate all cached statement data whenever a CNPJ is added or removed. Two changes:
-
-**1. Edge function (`supabase/functions/competitor-admin/index.ts`)**
-
-After any successful `add_cnpj` or `remove_cnpj` action, delete all rows from `statement_cache`. This forces the next data request to re-fetch and re-parse from CVM with the updated competitor list.
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
 ```typescript
-// After successful add/remove CNPJ:
-await supabaseAdmin.from("statement_cache").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
 ```
 
-**2. Frontend cache invalidation (`src/pages/Statements.tsx` or wherever admin actions are called)**
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-After an admin adds/removes a CNPJ in the Admin page, invalidate the React Query cache for statements so the UI refetches fresh data on next visit.
+### Changes
 
-In `src/pages/Admin.tsx`, after successful CNPJ mutations, call `queryClient.invalidateQueries({ queryKey: ["statements"] })`.
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-### Scope
-- `supabase/functions/competitor-admin/index.ts` — add cache purge after `add_cnpj` and `remove_cnpj`
-- `src/pages/Admin.tsx` — invalidate React Query statements cache after CNPJ changes
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
+
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
+
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
+
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 

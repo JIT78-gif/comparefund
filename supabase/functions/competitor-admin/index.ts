@@ -125,6 +125,8 @@ Deno.serve(async (req) => {
         .select()
         .single();
       if (error) throw error;
+      // Purge statement cache so next fetch includes the new CNPJ
+      await supabaseAdmin.from("statement_cache").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -154,6 +156,8 @@ Deno.serve(async (req) => {
       if (!id) return new Response(JSON.stringify({ error: "id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const { error } = await supabaseAdmin.from("competitor_cnpjs").delete().eq("id", id);
       if (error) throw error;
+      // Purge statement cache so removed CNPJ no longer appears
+      await supabaseAdmin.from("statement_cache").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -175,6 +179,10 @@ Deno.serve(async (req) => {
           .insert({ competitor_id, cnpj: clean, fund_name: fundName || null });
         if (error) { results.errors.push(`${rawCnpj}: ${error.message}`); }
         else { results.inserted++; }
+      }
+      // Purge statement cache after bulk import
+      if (results.inserted > 0) {
+        await supabaseAdmin.from("statement_cache").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       }
       return new Response(JSON.stringify(results), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
