@@ -126,20 +126,20 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
         </div>
       </div>
 
-      <div className="relative w-full overflow-auto rounded-lg border border-primary/30">
+      <div className="relative w-full overflow-auto rounded-sm border border-border border-l-2 border-l-primary max-h-[65vh]">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-card border-b-2 border-b-primary/50">
-              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[120px] border-r border-border">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-card border-b border-border">
+              <th className="text-left py-3 px-4 font-semibold text-foreground text-xs tracking-wider uppercase min-w-[120px] border-r border-border">
                 {t("grid.code")}
               </th>
-              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] border-r border-border">
+              <th className="text-left py-3 px-4 font-semibold text-foreground text-xs tracking-wider uppercase min-w-[280px] border-r border-border">
                 {t("grid.description")}
               </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-r border-border last:border-r-0"
+                  className="text-right py-3 px-4 font-semibold text-foreground text-xs tracking-wider uppercase min-w-[160px] border-r border-border last:border-r-0"
                 >
                   {col.label}
                 </th>
@@ -196,7 +196,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
                       <span
                         className={`${
                           isTopLevel
-                            ? "font-display font-bold text-foreground text-[15px]"
+                            ? "font-bold text-foreground text-[15px]"
                             : isParent
                             ? "font-semibold text-foreground"
                             : "text-muted-foreground"

@@ -27,9 +27,9 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border px-4 md:px-[60px]">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 md:px-[60px]">
         <div className="flex items-center justify-between h-14 max-w-[1400px] mx-auto">
-          <Link to="/" className="flex items-center gap-2 font-display font-extrabold text-base tracking-tight text-foreground">
+          <Link to="/" className="flex items-center gap-2 font-sans font-bold text-base tracking-tight text-foreground">
             <span className="text-primary text-lg">●</span>
             <span>FIDC<span className="text-primary">.</span>Intel</span>
           </Link>

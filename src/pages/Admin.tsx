@@ -223,7 +223,7 @@ const Admin = () => {
         <main className="pt-24 px-4 md:px-[60px] max-w-[600px] mx-auto">
           <div className="border border-border rounded-md p-8 bg-card text-center">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h1 className="font-display font-extrabold text-2xl text-foreground mb-2">Access Denied</h1>
+            <h1 className="font-bold text-2xl text-foreground mb-2">Access Denied</h1>
             <p className="text-muted-foreground text-sm">You need admin privileges to access this page.</p>
           </div>
         </main>
@@ -236,7 +236,7 @@ const Admin = () => {
       <Navbar />
       <main className="pt-20 px-3 sm:px-4 md:px-[60px] pb-12 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground">
+          <h1 className="font-bold text-2xl sm:text-3xl text-foreground">
             Admin Panel
           </h1>
         </div>
@@ -293,10 +293,10 @@ const Admin = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/30">
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Email</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Status</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Added</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Actions</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Email</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Status</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Added</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -345,7 +345,7 @@ const Admin = () => {
             <div className="border border-border rounded-md p-4 mb-6 bg-card">
               <div className="flex items-center gap-2 mb-3">
                 <Search className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-sm font-display font-semibold text-foreground uppercase tracking-wider">Search CVM Database</h3>
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Search CVM Database</h3>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <Input
@@ -451,12 +451,12 @@ const Admin = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/30">
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display w-8"></th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Name</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Slug</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">CNPJs</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Status</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Actions</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold w-8"></th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Name</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Slug</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">CNPJs</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Status</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -468,7 +468,7 @@ const Admin = () => {
                               {expanded.has(comp.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
                           </td>
-                          <td className="p-3 font-display font-semibold text-foreground">{comp.name}</td>
+                          <td className="p-3 font-semibold text-foreground">{comp.name}</td>
                           <td className="p-3 font-mono text-muted-foreground">{comp.slug}</td>
                           <td className="p-3">
                             <Badge variant="outline" className="font-mono">{comp.competitor_cnpjs.length}</Badge>
@@ -500,7 +500,7 @@ const Admin = () => {
                           <tr key={`${comp.id}-cnpjs`}>
                             <td colSpan={6} className="bg-muted/5 px-8 py-3">
                               <div className="flex items-center justify-between mb-3">
-                                <span className="text-xs tracking-[2px] uppercase text-muted-foreground font-display">CNPJs for {comp.name}</span>
+                                <span className="text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">CNPJs for {comp.name}</span>
                                 <div className="flex gap-2">
                                   <Dialog open={addCnpjOpen && targetCompId === comp.id} onOpenChange={(o) => { setAddCnpjOpen(o); if (o) setTargetCompId(comp.id); }}>
                                     <DialogTrigger asChild>
@@ -615,10 +615,10 @@ const Admin = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/30">
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Email</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Roles</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Joined</th>
-                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Actions</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Email</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Roles</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Joined</th>
+                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
