@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.competitor-admin]
 verify_jwt = false
+
+[functions.cvm-manager-search]
+verify_jwt = false
