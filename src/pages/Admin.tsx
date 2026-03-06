@@ -29,11 +29,18 @@ interface CvmSearchResult {
   condom: string;
 }
 
+interface UserWithRoles {
+  id: string;
+  email: string;
+  created_at: string;
+  roles: string[];
+}
+
 const Admin = () => {
   const queryClient = useQueryClient();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"competitors" | "emails">("competitors");
+  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users">("competitors");
 
   // Competitor dialogs
   const [addCompOpen, setAddCompOpen] = useState(false);
@@ -68,6 +75,15 @@ const Admin = () => {
     queryFn: async () => {
       const data = await invokeCompetitorAdmin("list_authorized_emails");
       return data as AuthorizedEmail[];
+    },
+    enabled: isAdmin,
+  });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ["admin_users"],
+    queryFn: async () => {
+      const data = await invokeCompetitorAdmin("list_users");
+      return data as UserWithRoles[];
     },
     enabled: isAdmin,
   });
