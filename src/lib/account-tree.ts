@@ -483,7 +483,7 @@ export function getDirectChildIds(nodes: AccountNode[], targetId: string): strin
 // ── Format type detection ────────────────────────────────────
 
 export function isRateColumn(id: string): boolean {
-  return id.startsWith("TAB_IX_") || id === "TAB_X_PR_GARANTIA_DIRCRED";
+  return id.startsWith("TAB_IX_") || id.startsWith("_TAB_IX") || id === "TAB_X_PR_GARANTIA_DIRCRED";
 }
 
 export function isQuantityColumn(id: string): boolean {
