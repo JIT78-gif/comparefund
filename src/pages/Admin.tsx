@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog } from "lucide-react";
 
 interface AuthorizedEmail {
   id: string;
@@ -29,11 +29,18 @@ interface CvmSearchResult {
   condom: string;
 }
 
+interface UserWithRoles {
+  id: string;
+  email: string;
+  created_at: string;
+  roles: string[];
+}
+
 const Admin = () => {
   const queryClient = useQueryClient();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"competitors" | "emails">("competitors");
+  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users">("competitors");
 
   // Competitor dialogs
   const [addCompOpen, setAddCompOpen] = useState(false);
@@ -72,6 +79,15 @@ const Admin = () => {
     enabled: isAdmin,
   });
 
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ["admin_users"],
+    queryFn: async () => {
+      const data = await invokeCompetitorAdmin("list_users");
+      return data as UserWithRoles[];
+    },
+    enabled: isAdmin,
+  });
+
   const mutation = useMutation({
     mutationFn: async (args: { action: string; payload: Record<string, unknown> }) =>
       invokeCompetitorAdmin(args.action, args.payload),
@@ -79,6 +95,9 @@ const Admin = () => {
       queryClient.invalidateQueries({ queryKey: ["competitors"] });
       if (variables.action.includes("authorized_email")) {
         queryClient.invalidateQueries({ queryKey: ["authorized_emails"] });
+      }
+      if (variables.action.includes("user_role")) {
+        queryClient.invalidateQueries({ queryKey: ["admin_users"] });
       }
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -231,6 +250,12 @@ const Admin = () => {
             className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "emails" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
           >
             <Users className="h-4 w-4 inline mr-2" />Authorized Emails
+          </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "users" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
+          >
+            <UserCog className="h-4 w-4 inline mr-2" />Users & Roles
           </button>
         </div>
 
@@ -566,6 +591,89 @@ const Admin = () => {
                         )}
                       </>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Users & Roles Tab */}
+        {activeTab === "users" && (
+          <div>
+            <div className="mb-4">
+              <p className="text-muted-foreground text-sm">View all users and manage their roles.</p>
+            </div>
+
+            {usersLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading...</div>
+            ) : (
+              <div className="border border-border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30">
+                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Email</th>
+                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Roles</th>
+                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Joined</th>
+                      <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <tr key={user.id} className="border-t border-border hover:bg-muted/10 transition-colors">
+                        <td className="p-3 font-mono text-foreground">{user.email || "—"}</td>
+                        <td className="p-3">
+                          <div className="flex gap-1 flex-wrap">
+                            {user.roles.length > 0 ? (
+                              user.roles.map((role) => (
+                                <Badge key={role} variant={role === "admin" ? "default" : "outline"} className="text-xs">
+                                  {role}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-muted-foreground text-xs italic">No roles</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</td>
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            {user.roles.includes("admin") ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7"
+                                onClick={() => {
+                                  if (confirm(`Remove admin role from ${user.email}?`)) {
+                                    mutation.mutate({ action: "set_user_role", payload: { user_id: user.id, role: "admin", grant: false } });
+                                    toast({ title: "Admin role removed" });
+                                  }
+                                }}
+                              >
+                                Remove Admin
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7"
+                                onClick={() => {
+                                  if (confirm(`Grant admin role to ${user.email}?`)) {
+                                    mutation.mutate({ action: "set_user_role", payload: { user_id: user.id, role: "admin", grant: true } });
+                                    toast({ title: "Admin role granted" });
+                                  }
+                                }}
+                              >
+                                Make Admin
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {users.length === 0 && (
+                      <tr><td colSpan={4} className="p-6 text-center text-muted-foreground italic">No users found</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>

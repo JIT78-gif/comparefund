@@ -234,6 +234,60 @@ Deno.serve(async (req) => {
       });
     }
 
+    // --- User Management ---
+    if (action === "list_users") {
+      const { data: profiles, error: pErr } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email, created_at")
+        .order("created_at", { ascending: false });
+      if (pErr) throw pErr;
+
+      const { data: roles, error: rErr } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id, role");
+      if (rErr) throw rErr;
+
+      const roleMap: Record<string, string[]> = {};
+      for (const r of roles || []) {
+        if (!roleMap[r.user_id]) roleMap[r.user_id] = [];
+        roleMap[r.user_id].push(r.role);
+      }
+
+      const users = (profiles || []).map((p: { id: string; email: string; created_at: string }) => ({
+        id: p.id,
+        email: p.email,
+        created_at: p.created_at,
+        roles: roleMap[p.id] || [],
+      }));
+
+      return new Response(JSON.stringify(users), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "set_user_role") {
+      const { user_id, role, grant } = body;
+      if (!user_id || !role) {
+        return new Response(JSON.stringify({ error: "user_id and role required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (grant) {
+        const { error } = await supabaseAdmin
+          .from("user_roles")
+          .upsert({ user_id, role }, { onConflict: "user_id,role" });
+        if (error) throw error;
+      } else {
+        const { error } = await supabaseAdmin
+          .from("user_roles")
+          .delete()
+          .eq("user_id", user_id)
+          .eq("role", role);
+        if (error) throw error;
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
