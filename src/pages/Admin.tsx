@@ -95,7 +95,7 @@ const Admin = () => {
       queryClient.invalidateQueries({ queryKey: ["competitors"] });
       // When CNPJs change, purge frontend statements cache so Compare/Statements refetch
       if (variables.action.includes("cnpj")) {
-        queryClient.invalidateQueries({ queryKey: ["statements"] });
+        queryClient.invalidateQueries({ queryKey: ["cvm-statements"] });
       }
       if (variables.action.includes("authorized_email")) {
         queryClient.invalidateQueries({ queryKey: ["authorized_emails"] });
