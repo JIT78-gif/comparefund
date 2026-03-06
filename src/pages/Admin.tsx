@@ -93,8 +93,8 @@ const Admin = () => {
       invokeCompetitorAdmin(args.action, args.payload),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["competitors"] });
-      // When CNPJs change, purge frontend statements cache so Compare/Statements refetch
-      if (variables.action.includes("cnpj")) {
+      // Purge statements cache when competitors or CNPJs change
+      if (variables.action.includes("cnpj") || variables.action.includes("competitor")) {
         queryClient.invalidateQueries({ queryKey: ["cvm-statements"] });
       }
       if (variables.action.includes("authorized_email")) {
