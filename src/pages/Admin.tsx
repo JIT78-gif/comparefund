@@ -415,9 +415,8 @@ const Admin = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 px-2 text-xs text-primary"
+                                className="h-6 px-2 text-xs text-primary hover:text-primary"
                                 onClick={() => handleAddFromCvm(r)}
-                                disabled={!cvmAddTarget}
                               >
                                 <Plus className="h-3 w-3 mr-1" /> Add
                               </Button>
