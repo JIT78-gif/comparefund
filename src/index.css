@@ -77,37 +77,37 @@
   }
 
   .dark {
-    --background: 220 30% 5%;
+    --background: 220 35% 4%;
     --foreground: 220 20% 90%;
-    --card: 220 25% 8%;
+    --card: 220 30% 6%;
     --card-foreground: 220 20% 90%;
-    --popover: 220 30% 7%;
+    --popover: 220 32% 5%;
     --popover-foreground: 220 20% 90%;
     --primary: 145 100% 42%;
     --primary-foreground: 220 30% 5%;
     --secondary: 212 26% 83%;
     --secondary-foreground: 220 30% 5%;
     --muted: 215 16% 46%;
-    --muted-foreground: 220 15% 58%;
-    --accent: 220 25% 12%;
+    --muted-foreground: 220 15% 62%;
+    --accent: 220 25% 10%;
     --accent-foreground: 215 20% 65%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 85% 97%;
-    --border: 220 20% 14%;
-    --input: 220 20% 14%;
+    --border: 220 20% 12%;
+    --input: 220 20% 12%;
     --ring: 145 100% 42%;
     --chart-1: 145 100% 42%;
     --chart-2: 211 96% 78%;
     --chart-3: 215 20% 65%;
     --chart-4: 215 16% 46%;
     --chart-5: 215 19% 34%;
-    --sidebar: 220 25% 8%;
+    --sidebar: 220 30% 6%;
     --sidebar-foreground: 220 20% 90%;
     --sidebar-primary: 145 100% 42%;
     --sidebar-primary-foreground: 220 30% 5%;
     --sidebar-accent: 215 20% 65%;
     --sidebar-accent-foreground: 220 30% 5%;
-    --sidebar-border: 220 20% 14%;
+    --sidebar-border: 220 20% 12%;
     --sidebar-ring: 145 100% 42%;
     --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.15);
     --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.15);
@@ -119,9 +119,12 @@
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.4);
 
     /* Tree grid specific */
-    --grid-header: 150 30% 10%;
-    --grid-row-top: 150 22% 8%;
-    --grid-row-parent: 150 18% 7%;
+    --grid-header: 160 35% 8%;
+    --grid-row-top: 160 30% 7%;
+    --grid-row-parent: 160 25% 6%;
+
+    /* Cyan table accent */
+    --table-accent: 199 89% 48%;
   }
 }
 

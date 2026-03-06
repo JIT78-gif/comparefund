@@ -50,7 +50,7 @@ const Login = () => {
           <p className="text-muted-foreground text-sm">Acesso restrito por convite</p>
         </div>
 
-        <div className="border border-border rounded-md p-8 bg-card">
+        <div className="border border-border/60 rounded-md p-8 bg-card">
           {sent ? (
             <div className="text-center space-y-4">
               <CheckCircle className="h-12 w-12 text-primary mx-auto" />

@@ -14,9 +14,9 @@ const colorMap = {
 
 const MetricCard = ({ icon, label, value, subtitle, color = "green" }: MetricCardProps) => {
   return (
-    <div className={`border bg-card p-5 md:p-6 rounded-md transition-colors flex flex-col justify-between ${color === "green" ? "border-primary/20 hover:border-primary/40" :
-      color === "blue" ? "border-secondary/20 hover:border-secondary/40" :
-        "border-border hover:border-border/80"
+    <div className={`border bg-card p-5 md:p-6 rounded-md transition-colors flex flex-col justify-between ${color === "green" ? "border-primary/20 hover:border-primary/30" :
+      color === "blue" ? "border-[hsl(var(--table-accent)_/_0.15)] hover:border-[hsl(var(--table-accent)_/_0.3)]" :
+        "border-border/60 hover:border-border"
       }`}>
       <div className="flex flex-col gap-4">
         {icon}
