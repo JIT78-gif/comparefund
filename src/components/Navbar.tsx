@@ -15,7 +15,6 @@ const Navbar = () => {
   const links = [
     { path: "/", label: "DASHBOARD" },
     { path: "/compare", label: t("nav.compare").toUpperCase() },
-    { path: "/statements", label: "DEMONSTRAÇÕES" },
     ...(isAdmin ? [{ path: "/admin", label: "ADMIN" }] : []),
   ];
 
