@@ -393,7 +393,7 @@ const Admin = () => {
                   </div>
                   <div className="max-h-[300px] overflow-y-auto border border-border rounded">
                     <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-muted/50">
+                      <thead className="sticky top-0 bg-grid-header">
                         <tr>
                           <th className="text-left p-2 text-muted-foreground">CNPJ</th>
                           <th className="text-left p-2 text-muted-foreground">Name</th>
