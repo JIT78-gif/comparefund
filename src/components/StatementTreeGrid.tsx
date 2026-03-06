@@ -126,20 +126,20 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
         </div>
       </div>
 
-      <div className="relative w-full overflow-auto rounded-lg border border-[hsl(var(--table-accent)_/_0.4)]">
+      <div className="relative w-full overflow-auto rounded-lg border border-primary/30">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-grid-header border-b-2 border-b-[hsl(var(--table-accent)_/_0.4)]">
-              <th className="sticky left-0 z-20 bg-grid-header text-left py-3 px-4 font-display font-semibold text-foreground min-w-[120px] border-r border-border/50">
+            <tr className="bg-card border-b-2 border-b-primary/50">
+              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[120px] border-r border-border">
                 {t("grid.code")}
               </th>
-              <th className="sticky left-[120px] z-20 bg-grid-header text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] border-r border-border/50">
+              <th className="text-left py-3 px-4 font-display font-semibold text-foreground min-w-[280px] border-r border-border">
                 {t("grid.description")}
               </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-r border-border/50 last:border-r-0"
+                  className="text-right py-3 px-4 font-display font-semibold text-foreground min-w-[160px] border-r border-border last:border-r-0"
                 >
                   {col.label}
                 </th>
@@ -152,28 +152,22 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
               const isExpanded = expanded.has(account.id);
               const isTopLevel = account.depth === 0;
 
-              const rowBg = isTopLevel
-                ? "bg-grid-row-top"
-                : isParent
-                ? "bg-grid-row-parent"
-                : "hover:bg-accent/30";
-
-              const stickyBg = isTopLevel
-                ? "bg-grid-row-top"
-                : isParent
-                ? "bg-grid-row-parent"
-                : "bg-background";
-
               return (
                 <tr
                   key={account.id}
-                  className={`border-b border-border/30 transition-colors ${rowBg}`}
+                  className={`border-b border-border/40 transition-colors ${
+                    isTopLevel
+                      ? "bg-primary/15"
+                      : isParent
+                      ? "bg-primary/8"
+                      : "hover:bg-card/50"
+                  }`}
                 >
-                  <td className={`sticky left-0 z-10 ${stickyBg} py-2.5 px-4 font-mono text-muted-foreground text-sm border-r border-border/30`}>
+                  <td className="py-2.5 px-4 font-mono text-muted-foreground text-sm border-r border-border/30">
                     {!isTopLevel && account.code}
                   </td>
 
-                  <td className={`sticky left-[120px] z-10 ${stickyBg} py-2.5 px-4 border-r border-border/30`}>
+                  <td className="py-2.5 px-4 border-r border-border/30">
                     <div
                       className="flex items-center gap-1.5"
                       style={{ paddingLeft: `${Math.max(0, account.depth - 1) * 20}px` }}
@@ -194,7 +188,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
                       {isParent && (
                         <button
                           onClick={() => toggleExpand(account.id)}
-                          className="text-[hsl(var(--table-accent))] hover:text-[hsl(var(--table-accent)_/_0.7)] transition-colors text-sm leading-none"
+                          className="text-primary hover:text-primary/80 transition-colors text-sm leading-none"
                         >
                           {isExpanded ? "▼" : "▶"}
                         </button>

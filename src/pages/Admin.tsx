@@ -292,7 +292,7 @@ const Admin = () => {
               <div className="border border-border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                     <tr className="bg-grid-header">
+                    <tr className="bg-muted/30">
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Email</th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Status</th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Added</th>
@@ -393,7 +393,7 @@ const Admin = () => {
                   </div>
                   <div className="max-h-[300px] overflow-y-auto border border-border rounded">
                     <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-grid-header">
+                      <thead className="sticky top-0 bg-muted/50">
                         <tr>
                           <th className="text-left p-2 text-muted-foreground">CNPJ</th>
                           <th className="text-left p-2 text-muted-foreground">Name</th>
@@ -450,7 +450,7 @@ const Admin = () => {
               <div className="border border-border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                     <tr className="bg-grid-header">
+                    <tr className="bg-muted/30">
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display w-8"></th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Name</th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Slug</th>
@@ -614,7 +614,7 @@ const Admin = () => {
               <div className="border border-border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-grid-header">
+                    <tr className="bg-muted/30">
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Email</th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Roles</th>
                       <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-display">Joined</th>
