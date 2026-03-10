@@ -325,7 +325,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title={t("compare.chart.unit")}>
+              <ChartCard title={t("compare.chart.unit")} subtitle={t("compare.chart.unit.subtitle")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
