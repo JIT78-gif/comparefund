@@ -117,7 +117,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
               <SelectValue placeholder="Todas as Tabs" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as Tabs</SelectItem>
+              <SelectItem value="all">{t("grid.allTabs")}</SelectItem>
               {TAB_LABELS.map((tab) => (
                 <SelectItem key={tab.code} value={tab.code}>{tab.label}</SelectItem>
               ))}
