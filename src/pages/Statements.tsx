@@ -341,9 +341,9 @@ const Statements = () => {
         {staleMonths.length > 0 && !error && (
           <Alert className="mb-4 border-accent bg-muted">
             <Info className="h-4 w-4 text-muted-foreground" />
-            <AlertTitle className="text-foreground">Showing cached data</AlertTitle>
+            <AlertTitle className="text-foreground">{t("cached.title")}</AlertTitle>
             <AlertDescription className="text-muted-foreground">
-              Data for {staleMonths.join(", ")} is from a previous fetch. The live source was temporarily unavailable.
+              {t("cached.description").replace("{months}", staleMonths.join(", "))}
             </AlertDescription>
           </Alert>
         )}
