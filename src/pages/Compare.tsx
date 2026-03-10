@@ -57,8 +57,14 @@ const BG_COLORS = [
   "bg-[#a855f7]",
 ];
 
+const MONTH_KEYS = [
+  "month.jan", "month.feb", "month.mar", "month.apr", "month.may", "month.jun",
+  "month.jul", "month.aug", "month.sep", "month.oct", "month.nov", "month.dec",
+];
+
 const Compare = () => {
   const { t } = useLanguage();
+  const MONTHS = MONTH_KEYS.map((k) => t(k));
   const [year, setYear] = useState(2024);
   const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
