@@ -106,7 +106,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
         </Button>
         {selectedAccounts.size > 0 && (
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="text-xs gap-1.5 text-destructive">
-            <X className="h-3.5 w-3.5" /> Limpar seleção
+            <X className="h-3.5 w-3.5" /> {t("grid.clearSelection")}
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{selectedAccounts.size}</Badge>
           </Button>
         )}
