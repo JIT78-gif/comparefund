@@ -102,6 +102,30 @@ const translations: Translations = {
   "month.oct": { pt: "Out", en: "Oct" },
   "month.nov": { pt: "Nov", en: "Nov" },
   "month.dec": { pt: "Dez", en: "Dec" },
+
+  // Cached data
+  "cached.title": { pt: "Dados em cache", en: "Showing cached data" },
+  "cached.description": { pt: "Os dados de {months} são de uma busca anterior. A fonte ao vivo estava temporariamente indisponível.", en: "Data for {months} is from a previous fetch. The live source was temporarily unavailable." },
+
+  // No data
+  "compare.noData": { pt: "Sem dados disponíveis para este período.", en: "No data available for this period." },
+
+  // Chart subtitle
+  "compare.chart.unit.subtitle": { pt: "Variação mensal", en: "Month-over-month change" },
+
+  // PL note
+  "compare.plNote": { pt: "PL calculado via dados agregados do Informe Mensal (cvm-compare). Pode diferir dos demonstrativos contábeis (cvm-statements).", en: "PL computed from aggregated Monthly Report data (cvm-compare). May differ from accounting statements (cvm-statements)." },
+
+  // Nav
+  "nav.statements": { pt: "Demonstrações", en: "Statements" },
+
+  // Grid
+  "grid.allTabs": { pt: "Todas as Tabs", en: "All Tabs" },
+  "grid.clearSelection": { pt: "Limpar seleção", en: "Clear selection" },
+  "grid.maxSelection": { pt: "Máximo de {max} contas selecionadas.", en: "Maximum of {max} accounts selected." },
+
+  // Statements chart button
+  "statements.viewChart": { pt: "Ver Gráfico", en: "View Chart" },
 };
 
 interface LanguageContextType {

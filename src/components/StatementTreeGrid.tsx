@@ -106,7 +106,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
         </Button>
         {selectedAccounts.size > 0 && (
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="text-xs gap-1.5 text-destructive">
-            <X className="h-3.5 w-3.5" /> Limpar seleção
+            <X className="h-3.5 w-3.5" /> {t("grid.clearSelection")}
             <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{selectedAccounts.size}</Badge>
           </Button>
         )}
@@ -117,7 +117,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
               <SelectValue placeholder="Todas as Tabs" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as Tabs</SelectItem>
+              <SelectItem value="all">{t("grid.allTabs")}</SelectItem>
               {TAB_LABELS.map((tab) => (
                 <SelectItem key={tab.code} value={tab.code}>{tab.label}</SelectItem>
               ))}
@@ -177,7 +177,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
                           checked={selectedAccounts.has(account.id)}
                           onCheckedChange={() => {
                             if (!selectedAccounts.has(account.id) && selectedAccounts.size >= MAX_SELECTION) {
-                              toast({ title: "Limite atingido", description: `Máximo de ${MAX_SELECTION} contas selecionadas.`, variant: "destructive" });
+                              toast({ title: "Limite atingido", description: t("grid.maxSelection").replace("{max}", String(MAX_SELECTION)), variant: "destructive" });
                               return;
                             }
                             onToggleAccount(account.id);

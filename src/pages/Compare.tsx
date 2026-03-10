@@ -6,7 +6,7 @@ import {
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatPercent, formatNumber, MONTHS } from "@/lib/format";
+import { formatCurrency, formatPercent, formatNumber } from "@/lib/format";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { fetchCompetitors } from "@/lib/competitors";
 
@@ -41,7 +41,7 @@ type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
 
 const CHART_COLORS = [
   "hsl(152, 100%, 45%)", // Green
-  "hsl(215, 60%, 15%)",  // Dark Blue
+  "hsl(45, 90%, 55%)",   // Amber/Gold (was dark blue)
   "hsl(210, 40%, 96%)",  // White/Grey
   "hsl(359, 100%, 65%)", // Red
   "hsl(45, 100%, 50%)",  // Yellow
@@ -50,15 +50,21 @@ const CHART_COLORS = [
 
 const BG_COLORS = [
   "bg-primary",
-  "bg-[#0b1b36]",
+  "bg-[#d4a017]",
   "bg-[#e2e8f0]",
   "bg-[#ff4d4f]",
   "bg-[#eab308]",
   "bg-[#a855f7]",
 ];
 
+const MONTH_KEYS = [
+  "month.jan", "month.feb", "month.mar", "month.apr", "month.may", "month.jun",
+  "month.jul", "month.aug", "month.sep", "month.oct", "month.nov", "month.dec",
+];
+
 const Compare = () => {
   const { t } = useLanguage();
+  const MONTHS = MONTH_KEYS.map((k) => t(k));
   const [year, setYear] = useState(2024);
   const [month, setMonth] = useState(5);
   const [fundType, setFundType] = useState<"STANDARD" | "NP">("STANDARD");
@@ -117,7 +123,7 @@ const Compare = () => {
     staleTime: 1000 * 60 * 30,
   });
 
-  const years = Array.from({ length: 18 }, (_, i) => 2010 + i);
+  const years = Array.from({ length: 15 }, (_, i) => 2013 + i);
 
   const chartData = data
     ? COMPANIES.map((c) => {
@@ -230,9 +236,14 @@ const Compare = () => {
           </div>
         )}
 
-        {data && (
+        {data && chartData.length === 0 && (
+          <div className="border border-border bg-card p-8 rounded-sm text-center text-muted-foreground text-sm mb-8">
+            {t("compare.noData")}
+          </div>
+        )}
+
+        {data && chartData.length > 0 && (
           <>
-            {/* Metric Cards — Row 1: Net Assets */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
@@ -314,7 +325,7 @@ const Compare = () => {
                 </BarChart>
               </ChartCard>
 
-              <ChartCard title={t("compare.chart.unit")}>
+              <ChartCard title={t("compare.chart.unit")} subtitle={t("compare.chart.unit.subtitle")}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(230 20% 15%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(220 15% 58%)", fontSize: 13 }} />
@@ -476,12 +487,16 @@ const Compare = () => {
   );
 };
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="border border-border bg-card p-5 rounded-sm">
-      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5 font-semibold">
+      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-1 font-semibold">
         {title}
       </h3>
+      {subtitle && (
+        <p className="text-[10px] text-muted-foreground/60 mb-4 font-mono">{subtitle}</p>
+      )}
+      {!subtitle && <div className="mb-4" />}
       <ResponsiveContainer width="100%" height={280}>
         {children as React.ReactElement}
       </ResponsiveContainer>
