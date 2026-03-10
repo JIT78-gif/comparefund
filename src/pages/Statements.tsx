@@ -381,7 +381,7 @@ const Statements = () => {
               onClick={() => chartRef.current?.scrollIntoView({ behavior: "smooth" })}
               className="gap-2 shadow-lg"
             >
-              <BarChart3 className="h-4 w-4" /> Ver Gráfico ({selectedAccounts.size})
+              <BarChart3 className="h-4 w-4" /> {t("statements.viewChart")} ({selectedAccounts.size})
             </Button>
           </div>
         )}

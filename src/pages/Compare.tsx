@@ -487,12 +487,16 @@ const Compare = () => {
   );
 };
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="border border-border bg-card p-5 rounded-sm">
-      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-5 font-semibold">
+      <h3 className="text-[11px] tracking-[2px] uppercase text-muted-foreground mb-1 font-semibold">
         {title}
       </h3>
+      {subtitle && (
+        <p className="text-[10px] text-muted-foreground/60 mb-4 font-mono">{subtitle}</p>
+      )}
+      {!subtitle && <div className="mb-4" />}
       <ResponsiveContainer width="100%" height={280}>
         {children as React.ReactElement}
       </ResponsiveContainer>
