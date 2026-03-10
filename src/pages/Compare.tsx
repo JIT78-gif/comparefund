@@ -243,7 +243,7 @@ const Compare = () => {
         )}
 
         {data && chartData.length > 0 && (
-            {/* Metric Cards — Row 1: Net Assets */}
+          <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
                 const d = (data as Record<string, CompanyData>)[c.key];
