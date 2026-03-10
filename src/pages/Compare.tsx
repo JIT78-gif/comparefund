@@ -41,7 +41,7 @@ type CompareResponse = Record<string, CompanyData> & { details: FundDetail[] };
 
 const CHART_COLORS = [
   "hsl(152, 100%, 45%)", // Green
-  "hsl(215, 60%, 15%)",  // Dark Blue
+  "hsl(45, 90%, 55%)",   // Amber/Gold (was dark blue)
   "hsl(210, 40%, 96%)",  // White/Grey
   "hsl(359, 100%, 65%)", // Red
   "hsl(45, 100%, 50%)",  // Yellow
@@ -50,7 +50,7 @@ const CHART_COLORS = [
 
 const BG_COLORS = [
   "bg-primary",
-  "bg-[#0b1b36]",
+  "bg-[#d4a017]",
   "bg-[#e2e8f0]",
   "bg-[#ff4d4f]",
   "bg-[#eab308]",
