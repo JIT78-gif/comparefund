@@ -177,7 +177,7 @@ const StatementTreeGrid = ({ columns, getValue, loading, selectedAccounts, onTog
                           checked={selectedAccounts.has(account.id)}
                           onCheckedChange={() => {
                             if (!selectedAccounts.has(account.id) && selectedAccounts.size >= MAX_SELECTION) {
-                              toast({ title: "Limite atingido", description: `Máximo de ${MAX_SELECTION} contas selecionadas.`, variant: "destructive" });
+                              toast({ title: "Limite atingido", description: t("grid.maxSelection").replace("{max}", String(MAX_SELECTION)), variant: "destructive" });
                               return;
                             }
                             onToggleAccount(account.id);
