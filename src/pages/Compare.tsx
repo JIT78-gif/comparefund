@@ -236,8 +236,13 @@ const Compare = () => {
           </div>
         )}
 
-        {data && (
-          <>
+        {data && chartData.length === 0 && (
+          <div className="border border-border bg-card p-8 rounded-sm text-center text-muted-foreground text-sm mb-8">
+            {t("compare.noData")}
+          </div>
+        )}
+
+        {data && chartData.length > 0 && (
             {/* Metric Cards — Row 1: Net Assets */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
