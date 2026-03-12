@@ -126,6 +126,21 @@ const translations: Translations = {
 
   // Statements chart button
   "statements.viewChart": { pt: "Ver Gráfico", en: "View Chart" },
+
+  // Regulation Chat
+  "chat.regulations": { pt: "Regulamentos", en: "Regulations" },
+  "chat.title": { pt: "Chat — Regulamentos FIDC", en: "Chat — FIDC Regulations" },
+  "chat.empty": { pt: "Pergunte sobre os regulamentos dos fundos. Ex: \"Quais as taxas de administração?\"", en: "Ask about fund regulations. E.g. \"What are the management fees?\"" },
+  "chat.placeholder": { pt: "Pergunte sobre regulamentos...", en: "Ask about regulations..." },
+
+  // Admin Regulations
+  "admin.regulations": { pt: "Regulamentos", en: "Regulations" },
+  "admin.regulations.desc": { pt: "Gerencie os regulamentos ingeridos por concorrente.", en: "Manage ingested regulations per competitor." },
+  "admin.regulations.upload": { pt: "Upload PDF", en: "Upload PDF" },
+  "admin.regulations.ingestUrl": { pt: "Ingerir de URL", en: "Ingest from URL" },
+  "admin.regulations.pasteText": { pt: "Colar Texto", en: "Paste Text" },
+  "admin.regulations.chunks": { pt: "chunks", en: "chunks" },
+  "admin.regulations.noDocuments": { pt: "Nenhum regulamento ingerido ainda.", en: "No regulations ingested yet." },
 };
 
 interface LanguageContextType {

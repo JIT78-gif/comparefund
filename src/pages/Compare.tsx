@@ -484,6 +484,13 @@ const Compare = () => {
           </>
         )}
       </div>
+
+      {/* Regulation Chat */}
+      <RegulationChat
+        competitors={competitorList
+          .filter((c) => c.status === "active")
+          .map((c) => ({ key: c.slug, label: c.name, id: c.id }))}
+      />
     </div>
   );
 };
