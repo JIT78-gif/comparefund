@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.cvm-manager-search]
 verify_jwt = false
+
+[functions.rag-ingest]
+verify_jwt = false
+
+[functions.rag-chat]
+verify_jwt = false

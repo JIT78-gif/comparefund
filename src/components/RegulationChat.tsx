@@ -1,0 +1,253 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageSquareText, Send, Loader2, X } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface Competitor {
+  key: string;
+  label: string;
+  id?: string;
+}
+
+type Msg = { role: "user" | "assistant"; content: string };
+
+interface RegulationChatProps {
+  competitors: Competitor[];
+}
+
+export default function RegulationChat({ competitors }: RegulationChatProps) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [open]);
+
+  const toggleCompetitor = (id: string) => {
+    setSelectedCompetitors((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const send = useCallback(async () => {
+    const text = input.trim();
+    if (!text || isLoading) return;
+
+    const userMsg: Msg = { role: "user", content: text };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setInput("");
+    setIsLoading(true);
+
+    let assistantSoFar = "";
+
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant") {
+          return prev.map((m, i) =>
+            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
+          );
+        }
+        return [...prev, { role: "assistant", content: assistantSoFar }];
+      });
+    };
+
+    try {
+      const competitorIds = selectedCompetitors.size > 0
+        ? competitors
+            .filter((c) => selectedCompetitors.has(c.key))
+            .map((c) => c.id)
+            .filter(Boolean)
+        : [];
+
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rag-chat`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: allMessages,
+          competitor_ids: competitorIds,
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) upsertAssistant(content);
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Chat error:", e);
+      upsertAssistant(
+        `\n\n⚠️ ${e instanceof Error ? e.message : "Error connecting to AI"}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [input, isLoading, messages, selectedCompetitors, competitors]);
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+      >
+        <MessageSquareText className="h-5 w-5" />
+        <span className="text-sm font-medium hidden sm:inline">
+          {t("chat.regulations")}
+        </span>
+      </button>
+
+      {/* Chat Sheet */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[480px] flex flex-col p-0">
+          <SheetHeader className="p-4 pb-2 border-b border-border">
+            <SheetTitle className="text-sm font-semibold flex items-center gap-2">
+              <MessageSquareText className="h-4 w-4 text-primary" />
+              {t("chat.title")}
+            </SheetTitle>
+          </SheetHeader>
+
+          {/* Competitor filter chips */}
+          {competitors.length > 0 && (
+            <div className="px-4 py-2 flex flex-wrap gap-1.5 border-b border-border">
+              {competitors.map((c) => (
+                <Badge
+                  key={c.key}
+                  variant={selectedCompetitors.has(c.key) ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] tracking-wider"
+                  onClick={() => toggleCompetitor(c.key)}
+                >
+                  {c.label}
+                  {selectedCompetitors.has(c.key) && (
+                    <X className="h-3 w-3 ml-1" />
+                  )}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Messages */}
+          <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+            <div className="py-4 space-y-4">
+              {messages.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  <MessageSquareText className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                  <p>{t("chat.empty")}</p>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                  </div>
+                </div>
+              ))}
+              {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+                <div className="flex justify-start">
+                  <div className="bg-muted rounded-lg px-3 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Input */}
+          <div className="p-4 border-t border-border">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                send();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={t("chat.placeholder")}
+                disabled={isLoading}
+                className="flex-1"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!input.trim() || isLoading}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
