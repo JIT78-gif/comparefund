@@ -1,15 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 const FNET_LIST_URL =
   "https://fnet.bmfbovespa.com.br/fnet/publico/pesquisarGerenciadorDocumentosDados";
 const FNET_DOC_URL =
   "https://fnet.bmfbovespa.com.br/fnet/publico/exibirDocumento";
+
+const DEFAULT_MAX_DOCS_PER_CNPJ = 8;
+const DEFAULT_MAX_TOTAL_DOCS = 25;
+const FETCH_TIMEOUT_MS = 15000;
+
+type FnetDoc = {
+  id: number | string;
+  categoriaDocumento?: string;
+  descricaoDocumento?: string;
+  dataReferencia?: string;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,13 +23,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -33,16 +35,15 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+
     const token = authHeader.replace("Bearer ", "");
     const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const userId = claims.claims.sub as string;
 
+    if (claimsErr || !claims?.claims?.sub) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+
+    const userId = claims.claims.sub as string;
     const adminClient = createClient(supabaseUrl, serviceKey);
 
     const { data: roleData } = await adminClient
@@ -53,42 +54,42 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!roleData) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Admin access required" }, 403);
     }
 
-    const body = await req.json();
-    const { competitor_id } = body;
+    const body = await safeJson(req);
+    const competitorId = typeof body?.competitor_id === "string" ? body.competitor_id : null;
 
-    if (!competitor_id) {
-      return new Response(JSON.stringify({ error: "competitor_id is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!competitorId) {
+      return jsonResponse({ error: "competitor_id is required" }, 400);
     }
 
-    // Get active CNPJs for this competitor
+    const maxDocsPerCnpj = normalizeLimit(body?.max_docs_per_cnpj, DEFAULT_MAX_DOCS_PER_CNPJ, 1, 30);
+    const maxTotalDocs = normalizeLimit(body?.max_total_docs, DEFAULT_MAX_TOTAL_DOCS, 1, 60);
+
     const { data: cnpjs, error: cnpjErr } = await adminClient
       .from("competitor_cnpjs")
       .select("cnpj, fund_name")
-      .eq("competitor_id", competitor_id)
+      .eq("competitor_id", competitorId)
       .eq("status", "active");
 
     if (cnpjErr) throw cnpjErr;
+
     if (!cnpjs || cnpjs.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "No active CNPJs found for this competitor" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({
+        success: true,
+        total_found: 0,
+        total_new: 0,
+        total_ingested: 0,
+        stopped_early: false,
+        errors: ["No active CNPJs found for this competitor"],
+      });
     }
 
-    // Get existing source_urls to skip duplicates
     const { data: existingDocs } = await adminClient
       .from("regulation_documents")
       .select("source_url")
-      .eq("competitor_id", competitor_id)
+      .eq("competitor_id", competitorId)
       .not("source_url", "is", null);
 
     const existingUrls = new Set((existingDocs || []).map((d) => d.source_url));
@@ -96,155 +97,213 @@ Deno.serve(async (req) => {
     let totalFound = 0;
     let totalNew = 0;
     let totalIngested = 0;
+    let stoppedEarly = false;
     const errors: string[] = [];
 
     for (const cnpjRow of cnpjs) {
+      if (totalNew >= maxTotalDocs) {
+        stoppedEarly = true;
+        break;
+      }
+
       const cnpjDigits = cnpjRow.cnpj.replace(/[.\-\/]/g, "");
 
       try {
-        // Query FNET for documents
-        const params = new URLSearchParams({
-          d: "0",
-          s: "0",
-          l: "200",
-          o: '[{"dataReferencia":"desc"}]',
-          cnpjFundo: cnpjDigits,
-          idCategoriaDocumento: "0",
-          situacao: "A",
-        });
+        const fnetDocs = await fetchRegulationsFromFnet(cnpjDigits);
+        totalFound += fnetDocs.length;
 
-        const listRes = await fetch(`${FNET_LIST_URL}?${params}`, {
-          headers: { Accept: "application/json" },
-        });
+        let processedForCnpj = 0;
 
-        if (!listRes.ok) {
-          errors.push(`FNET list failed for ${cnpjDigits}: HTTP ${listRes.status}`);
-          await listRes.text();
-          continue;
-        }
+        for (const reg of fnetDocs) {
+          if (processedForCnpj >= maxDocsPerCnpj || totalNew >= maxTotalDocs) {
+            stoppedEarly = true;
+            break;
+          }
 
-        const listData = await listRes.json();
-        const allDocs = listData?.dados || [];
-
-        // Filter for "Regulamento" category
-        const regulamentos = allDocs.filter(
-          (doc: any) => doc.categoriaDocumento === "Regulamento"
-        );
-
-        totalFound += regulamentos.length;
-
-        for (const reg of regulamentos) {
-          const docId = reg.id;
+          const docId = String(reg.id);
           const sourceUrl = `fnet:${docId}`;
 
-          // Skip already ingested
           if (existingUrls.has(sourceUrl)) continue;
+
           totalNew++;
+          processedForCnpj++;
 
-          try {
-            // Fetch document HTML content
-            const docRes = await fetch(`${FNET_DOC_URL}?cvm=true&id=${docId}`);
-            if (!docRes.ok) {
-              errors.push(`Failed to fetch doc ${docId}: HTTP ${docRes.status}`);
-              await docRes.text();
-              continue;
-            }
+          const ingestResult = await ingestRegulationDocument({
+            adminClient,
+            competitorId,
+            cnpjDigits,
+            fundName: cnpjRow.fund_name,
+            reg,
+            sourceUrl,
+            docId,
+          });
 
-            let htmlContent = await docRes.text();
-
-            // Strip HTML tags to get plain text
-            const textContent = htmlContent
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-              .replace(/<[^>]*>/g, " ")
-              .replace(/&nbsp;/g, " ")
-              .replace(/&amp;/g, "&")
-              .replace(/&lt;/g, "<")
-              .replace(/&gt;/g, ">")
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
-              .replace(/\s+/g, " ")
-              .trim();
-
-            if (textContent.length < 50) {
-              errors.push(`Doc ${docId}: extracted text too short (${textContent.length} chars)`);
-              continue;
-            }
-
-            // Build title from FNET metadata
-            const docTitle =
-              reg.descricaoDocumento ||
-              reg.categoriaDocumento ||
-              `Regulamento ${cnpjRow.fund_name || cnpjDigits}`;
-            const fullTitle = `${docTitle} (${reg.dataReferencia || "sem data"})`;
-
-            // Create document record
-            const { data: newDoc, error: docInsertErr } = await adminClient
-              .from("regulation_documents")
-              .insert({
-                competitor_id,
-                title: fullTitle,
-                source_url: sourceUrl,
-                status: "processing",
-              })
-              .select("id")
-              .single();
-
-            if (docInsertErr || !newDoc) {
-              errors.push(`Failed to insert doc record for ${docId}`);
-              continue;
-            }
-
-            // Chunk the text
-            const chunks = chunkText(textContent, 500, 50);
-
-            // Insert chunks in batches
-            const chunkRows = chunks.map((content, index) => ({
-              document_id: newDoc.id,
-              chunk_index: index,
-              content,
-            }));
-
-            for (let i = 0; i < chunkRows.length; i += 50) {
-              const batch = chunkRows.slice(i, i + 50);
-              await adminClient.from("regulation_chunks").insert(batch);
-            }
-
-            // Mark as ready
-            await adminClient
-              .from("regulation_documents")
-              .update({ status: "ready", chunk_count: chunks.length })
-              .eq("id", newDoc.id);
-
+          if (ingestResult.ok) {
             existingUrls.add(sourceUrl);
             totalIngested++;
-          } catch (docErr) {
-            errors.push(`Error processing doc ${docId}: ${docErr instanceof Error ? docErr.message : "unknown"}`);
+          } else {
+            errors.push(ingestResult.error);
           }
         }
-      } catch (cnpjErr) {
-        errors.push(`Error fetching FNET for ${cnpjDigits}: ${cnpjErr instanceof Error ? cnpjErr.message : "unknown"}`);
+      } catch (err) {
+        errors.push(
+          `Error fetching FNET for ${cnpjDigits}: ${
+            err instanceof Error ? err.message : "unknown"
+          }`,
+        );
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        total_found: totalFound,
-        total_new: totalNew,
-        total_ingested: totalIngested,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({
+      success: true,
+      total_found: totalFound,
+      total_new: totalNew,
+      total_ingested: totalIngested,
+      stopped_early: stoppedEarly,
+      limits: {
+        max_docs_per_cnpj: maxDocsPerCnpj,
+        max_total_docs: maxTotalDocs,
+      },
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (e) {
     console.error("fnet-fetch error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    return jsonResponse(
+      { error: e instanceof Error ? e.message : "Unknown error" },
+      500,
     );
   }
 });
+
+async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> {
+  const params = new URLSearchParams({
+    d: "0",
+    s: "0",
+    l: "200",
+    o: '[{"dataReferencia":"desc"}]',
+    cnpjFundo: cnpjDigits,
+    idCategoriaDocumento: "0",
+    situacao: "A",
+  });
+
+  const listRes = await fetchWithTimeout(`${FNET_LIST_URL}?${params}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!listRes.ok) {
+    throw new Error(`FNET list failed: HTTP ${listRes.status}`);
+  }
+
+  const listData = await listRes.json();
+  const allDocs = Array.isArray(listData?.dados) ? listData.dados : [];
+
+  return allDocs.filter((doc: FnetDoc) => doc.categoriaDocumento === "Regulamento");
+}
+
+type IngestParams = {
+  adminClient: ReturnType<typeof createClient>;
+  competitorId: string;
+  cnpjDigits: string;
+  fundName: string | null;
+  reg: FnetDoc;
+  sourceUrl: string;
+  docId: string;
+};
+
+async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { adminClient, competitorId, cnpjDigits, fundName, reg, sourceUrl, docId } = params;
+
+  let documentId: string | null = null;
+
+  try {
+    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`);
+    if (!docRes.ok) {
+      return { ok: false, error: `Failed to fetch doc ${docId}: HTTP ${docRes.status}` };
+    }
+
+    const htmlContent = await docRes.text();
+    const textContent = extractTextFromHtml(htmlContent);
+
+    if (textContent.length < 50) {
+      return {
+        ok: false,
+        error: `Doc ${docId}: extracted text too short (${textContent.length} chars)`,
+      };
+    }
+
+    const docTitle =
+      reg.descricaoDocumento ||
+      reg.categoriaDocumento ||
+      `Regulamento ${fundName || cnpjDigits}`;
+    const fullTitle = `${docTitle} (${reg.dataReferencia || "sem data"})`;
+
+    const { data: newDoc, error: docInsertErr } = await adminClient
+      .from("regulation_documents")
+      .insert({
+        competitor_id: competitorId,
+        title: fullTitle,
+        source_url: sourceUrl,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    if (docInsertErr || !newDoc) {
+      return { ok: false, error: `Failed to insert doc record for ${docId}` };
+    }
+
+    documentId = newDoc.id;
+
+    const chunks = chunkText(textContent, 500, 50);
+    const chunkRows = chunks.map((content, index) => ({
+      document_id: newDoc.id,
+      chunk_index: index,
+      content,
+    }));
+
+    for (let i = 0; i < chunkRows.length; i += 50) {
+      const batch = chunkRows.slice(i, i + 50);
+      const { error: batchErr } = await adminClient.from("regulation_chunks").insert(batch);
+      if (batchErr) throw batchErr;
+    }
+
+    const { error: updateErr } = await adminClient
+      .from("regulation_documents")
+      .update({ status: "ready", chunk_count: chunks.length })
+      .eq("id", newDoc.id);
+
+    if (updateErr) throw updateErr;
+
+    return { ok: true };
+  } catch (err) {
+    if (documentId) {
+      await adminClient
+        .from("regulation_documents")
+        .update({ status: "failed" })
+        .eq("id", documentId);
+    }
+
+    return {
+      ok: false,
+      error: `Error processing doc ${docId}: ${err instanceof Error ? err.message : "unknown"}`,
+    };
+  }
+}
+
+function extractTextFromHtml(htmlContent: string): string {
+  return htmlContent
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   const words = text.split(/\s+/);
@@ -259,4 +318,36 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
     start += chunkSize - overlap;
   }
   return chunks;
+}
+
+async function safeJson(req: Request): Promise<Record<string, unknown>> {
+  try {
+    return await req.json();
+  } catch {
+    return {};
+  }
+}
+
+function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
+}
+
+async function fetchWithTimeout(input: string, init?: RequestInit, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }

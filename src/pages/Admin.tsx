@@ -1005,33 +1005,26 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
   const handleFnetFetch = async (competitorId: string) => {
     setFnetFetching(competitorId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const { data, error } = await supabase.functions.invoke("fnet-fetch", {
+        body: { competitor_id: competitorId },
+      });
 
-      const res = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/fnet-fetch`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ competitor_id: competitorId }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (error) throw error;
 
-      const desc = `Found ${data.total_found} regulations, ${data.total_new} new, ${data.total_ingested} ingested.`;
+      const desc = `Found ${data?.total_found ?? 0} regulations, ${data?.total_new ?? 0} new, ${data?.total_ingested ?? 0} ingested.`;
       toast({ title: "FNET Fetch Complete", description: desc });
-      if (data.errors?.length) {
+
+      if (data?.errors?.length) {
         console.warn("FNET fetch errors:", data.errors);
       }
+
       queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
     } catch (err) {
-      toast({ title: "FNET fetch failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+      toast({
+        title: "FNET fetch failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
     } finally {
       setFnetFetching(null);
     }
@@ -1039,30 +1032,40 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
 
   const handleFnetFetchAll = async () => {
     setFnetFetching("all");
-    let totalIngested = 0;
-    for (const comp of competitors) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 
-        const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/fnet-fetch`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            },
-            body: JSON.stringify({ competitor_id: comp.id }),
-          }
-        );
-        const data = await res.json();
-        if (res.ok) totalIngested += data.total_ingested || 0;
-      } catch { /* continue */ }
+    let totalIngested = 0;
+    const failedCompetitors: string[] = [];
+
+    for (const comp of competitors) {
+      const { data, error } = await supabase.functions.invoke("fnet-fetch", {
+        body: { competitor_id: comp.id },
+      });
+
+      if (error) {
+        failedCompetitors.push(`${comp.name}: ${error.message}`);
+        continue;
+      }
+
+      totalIngested += data?.total_ingested || 0;
+
+      if (data?.errors?.length) {
+        console.warn(`FNET fetch warnings for ${comp.name}:`, data.errors);
+      }
     }
-    toast({ title: "FNET Fetch All Complete", description: `Ingested ${totalIngested} new regulations across all competitors.` });
+
+    if (failedCompetitors.length > 0) {
+      toast({
+        title: "FNET Fetch All finished with issues",
+        description: failedCompetitors.join(" | "),
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "FNET Fetch All Complete",
+        description: `Ingested ${totalIngested} new regulations across all competitors.`,
+      });
+    }
+
     queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
     setFnetFetching(null);
   };
