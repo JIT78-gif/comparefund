@@ -898,6 +898,7 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
   const [textContent, setTextContent] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [mode, setMode] = useState<"text" | "url" | "file">("text");
+  const [fnetFetching, setFnetFetching] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: documents = [], isLoading: docsLoading } = useQuery({
