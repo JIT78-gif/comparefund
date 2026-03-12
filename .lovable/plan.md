@@ -1,38 +1,98 @@
 
 
-## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
+# RAG Chat for Fund Regulations
 
-### Problem
-The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
+## Approach
 
-```typescript
-const isVirtual = account.id.startsWith("_");
-const value = isVirtual ? 0 : getValue(col.key, account.id);
+Use **Supabase Storage** (built into Lovable Cloud) for PDF file storage instead of Google — no external connector needed, simpler setup. For text extraction from PDFs, we'll use the **Firecrawl** connector which can scrape/extract content from URLs, or we can extract text directly in the edge function.
+
+The full-text search approach with Postgres `tsvector` remains the best fit — no embeddings API needed.
+
+## Architecture
+
+```text
+Admin uploads PDF (or pastes CVM URL)
+        │
+        ▼
+  rag-ingest (edge function)
+  ├─ Store PDF in Supabase Storage bucket "regulations"
+  ├─ Extract text (pdf-parse or fetch markdown via URL)
+  ├─ Chunk text (~500 tokens, overlapping)
+  └─ Store chunks in regulation_chunks table (with tsvector)
+        │
+        ▼
+User asks question in Compare page chat
+        │
+        ▼
+  rag-chat (edge function)
+  ├─ Full-text search regulation_chunks
+  ├─ Retrieve top 10 chunks as context
+  ├─ Send to Gemini 3 Flash via Lovable AI gateway
+  └─ Stream response back
 ```
 
-All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
+## Implementation
 
-### Changes
+### 1. Database Migration
 
-**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
-- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
+- **`regulation_documents`** table: id, competitor_id (FK), title, source_url, file_path (storage), status, created_at
+- **`regulation_chunks`** table: id, document_id (FK), chunk_index, content (text), search_vector (tsvector), created_at
+- GIN index on search_vector
+- `search_regulations(query_text, competitor_slugs[])` SQL function
+- RLS: authenticated users can SELECT; service_role can INSERT/UPDATE/DELETE
 
-**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
-- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
-- For rate columns (Tab IX), compute average instead of sum
-- Pass the tree structure to look up children
+### 2. Storage Bucket
 
-**3. `src/components/Navbar.tsx`** — Add missing nav link
-- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
-- Rename "HOME" to "DASHBOARD"
+- Create `regulations` bucket for PDF files (private, authenticated access)
 
-**4. `src/index.css`** — Switch body font
-- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
-- Keep `font-mono` utility class for numeric table cells only
+### 3. Edge Function: `rag-ingest`
+
+- Admin-only (checks user role via service_role client)
+- Accepts: uploaded PDF file OR URL to scrape
+- If file: store in `regulations` bucket, extract text using basic PDF text extraction
+- If URL: fetch content as text/markdown
+- Chunk the text into ~500-token segments with ~50-token overlap
+- Insert document metadata + chunks with auto-generated tsvector
+- Returns chunk count
+
+### 4. Edge Function: `rag-chat`
+
+- Authenticated users only
+- Receives: question, optional competitor_ids filter
+- Calls `search_regulations()` to get top 10 matching chunks
+- Builds prompt with regulation context + user question
+- System prompt: "You are a FIDC regulation expert. Answer in the user's language. Compare regulations when chunks from multiple competitors are present."
+- Streams response from `google/gemini-3-flash-preview` via Lovable AI gateway
+- Returns SSE stream
+
+### 5. Frontend: `RegulationChat.tsx`
+
+- Floating button (bottom-right) on Compare page with "Regulamentos" label
+- Opens a Sheet/Drawer with:
+  - Chat message list (markdown rendered via simple prose styles)
+  - Competitor filter chips (pre-populated from loaded competitors)
+  - Text input + send button at bottom
+  - SSE streaming display
+- State managed in React (no persistence)
+
+### 6. Admin: Regulation Ingestion Section
+
+- New collapsible section in Admin page: "Regulamentos"
+- Per competitor: list ingested documents with chunk count
+- "Upload PDF" button (file input)
+- "Ingest from URL" input field
+- Status indicators (ingesting/done/error)
 
 ### Files
-- `src/lib/account-tree.ts` — add child lookup helper
-- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
-- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
-- `src/index.css` — change body font to Inter
+
+| File | Action |
+|------|--------|
+| Migration SQL | New: tables, function, storage bucket |
+| `supabase/functions/rag-ingest/index.ts` | New |
+| `supabase/functions/rag-chat/index.ts` | New |
+| `supabase/config.toml` | Add function entries |
+| `src/components/RegulationChat.tsx` | New |
+| `src/pages/Compare.tsx` | Add floating chat button |
+| `src/pages/Admin.tsx` | Add regulation ingestion UI |
+| `src/contexts/LanguageContext.tsx` | Add translation keys for chat UI |
 
