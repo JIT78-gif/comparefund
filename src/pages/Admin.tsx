@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog, FileText } from "lucide-react";
 
 interface AuthorizedEmail {
   id: string;
@@ -56,7 +56,7 @@ const Admin = () => {
   const queryClient = useQueryClient();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users">("competitors");
+  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users" | "regulations">("competitors");
 
   // Competitor dialogs
   const [addCompOpen, setAddCompOpen] = useState(false);
@@ -343,6 +343,12 @@ const Admin = () => {
             className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "users" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
           >
             <UserCog className="h-4 w-4 inline mr-2" />Users & Roles
+          </button>
+          <button
+            onClick={() => setActiveTab("regulations")}
+            className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "regulations" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
+          >
+            <FileText className="h-4 w-4 inline mr-2" />Regulamentos
           </button>
         </div>
 
@@ -792,6 +798,11 @@ const Admin = () => {
           </div>
         )}
 
+        {/* Regulations Tab */}
+        {activeTab === "regulations" && (
+          <RegulationsAdmin competitors={competitors} />
+        )}
+
         {/* Users & Roles Tab */}
         {activeTab === "users" && (
           <div>
@@ -878,5 +889,239 @@ const Admin = () => {
     </div>
   );
 };
+
+
+function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
+  const [ingesting, setIngesting] = useState(false);
+  const [selectedComp, setSelectedComp] = useState("");
+  const [title, setTitle] = useState("");
+  const [textContent, setTextContent] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [mode, setMode] = useState<"text" | "url" | "file">("text");
+  const queryClient = useQueryClient();
+
+  const { data: documents = [], isLoading: docsLoading } = useQuery({
+    queryKey: ["regulation_documents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("regulation_documents")
+        .select("*, competitors(name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const handleIngest = async () => {
+    if (!selectedComp || !title.trim()) {
+      toast({ title: "Error", description: "Select a competitor and provide a title.", variant: "destructive" });
+      return;
+    }
+    setIngesting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+
+      if (mode === "file") {
+        const fileInput = document.getElementById("reg-file-input") as HTMLInputElement;
+        const file = fileInput?.files?.[0];
+        if (!file) {
+          toast({ title: "Error", description: "Select a PDF file.", variant: "destructive" });
+          setIngesting(false);
+          return;
+        }
+        const formData = new FormData();
+        formData.append("competitor_id", selectedComp);
+        formData.append("title", title.trim());
+        formData.append("file", file);
+
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/rag-ingest`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: formData,
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        toast({ title: "Success", description: `Ingested ${data.chunk_count} chunks.` });
+      } else {
+        const body: Record<string, unknown> = {
+          competitor_id: selectedComp,
+          title: title.trim(),
+        };
+        if (mode === "url") {
+          body.source_url = sourceUrl.trim();
+        } else {
+          body.text_content = textContent.trim();
+        }
+
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/rag-ingest`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify(body),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        toast({ title: "Success", description: `Ingested ${data.chunk_count} chunks.` });
+      }
+
+      setTitle("");
+      setTextContent("");
+      setSourceUrl("");
+      queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
+    } catch (err) {
+      toast({ title: "Ingestion failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  const handleDelete = async (docId: string) => {
+    if (!confirm("Delete this regulation document and all its chunks?")) return;
+    try {
+      const { error } = await supabase.from("regulation_documents").delete().eq("id", docId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
+      toast({ title: "Deleted" });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-muted-foreground text-sm mb-4">Manage regulation documents for RAG chat.</p>
+
+      {/* Ingestion form */}
+      <div className="border border-border rounded-md p-4 mb-6 bg-card space-y-3">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Ingest Regulation</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Select value={selectedComp} onValueChange={setSelectedComp}>
+            <SelectTrigger><SelectValue placeholder="Select competitor" /></SelectTrigger>
+            <SelectContent>
+              {competitors.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Document title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMode("text")}
+            className={`px-3 py-1.5 text-xs font-mono tracking-wider uppercase rounded-sm border transition-colors ${mode === "text" ? "bg-primary/10 border-primary text-primary" : "bg-muted border-border text-muted-foreground"}`}
+          >
+            Paste Text
+          </button>
+          <button
+            onClick={() => setMode("url")}
+            className={`px-3 py-1.5 text-xs font-mono tracking-wider uppercase rounded-sm border transition-colors ${mode === "url" ? "bg-primary/10 border-primary text-primary" : "bg-muted border-border text-muted-foreground"}`}
+          >
+            From URL
+          </button>
+          <button
+            onClick={() => setMode("file")}
+            className={`px-3 py-1.5 text-xs font-mono tracking-wider uppercase rounded-sm border transition-colors ${mode === "file" ? "bg-primary/10 border-primary text-primary" : "bg-muted border-border text-muted-foreground"}`}
+          >
+            Upload PDF
+          </button>
+        </div>
+
+        {mode === "text" && (
+          <Textarea
+            placeholder="Paste the regulation text here..."
+            value={textContent}
+            onChange={(e) => setTextContent(e.target.value)}
+            rows={6}
+          />
+        )}
+        {mode === "url" && (
+          <Input
+            placeholder="https://..."
+            value={sourceUrl}
+            onChange={(e) => setSourceUrl(e.target.value)}
+          />
+        )}
+        {mode === "file" && (
+          <input
+            id="reg-file-input"
+            type="file"
+            accept=".pdf,.txt"
+            className="text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border file:border-border file:text-sm file:bg-muted file:text-foreground hover:file:bg-muted/80"
+          />
+        )}
+
+        <Button onClick={handleIngest} disabled={ingesting || !selectedComp || !title.trim()} className="gap-2">
+          {ingesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {ingesting ? "Ingesting..." : "Ingest"}
+        </Button>
+      </div>
+
+      {/* Documents list */}
+      {docsLoading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading...</div>
+      ) : documents.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground italic">No regulations ingested yet.</div>
+      ) : (
+        <div className="border border-border rounded-md overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30">
+                <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Competitor</th>
+                <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Title</th>
+                <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Status</th>
+                <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Chunks</th>
+                <th className="text-left p-3 text-xs tracking-[2px] uppercase text-muted-foreground font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {documents.map((doc: any) => (
+                <tr key={doc.id} className="border-t border-border hover:bg-muted/10 transition-colors">
+                  <td className="p-3 text-foreground">{doc.competitors?.name || "—"}</td>
+                  <td className="p-3 text-foreground font-medium">{doc.title}</td>
+                  <td className="p-3">
+                    <Badge variant={doc.status === "ready" ? "default" : "outline"} className="text-[10px]">
+                      {doc.status}
+                    </Badge>
+                  </td>
+                  <td className="p-3 text-muted-foreground font-mono">{doc.chunk_count}</td>
+                  <td className="p-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                      onClick={() => handleDelete(doc.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default Admin;
