@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog, FileText } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog, FileText, Download } from "lucide-react";
 
 interface AuthorizedEmail {
   id: string;
