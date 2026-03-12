@@ -121,6 +121,82 @@ export type Database = {
         }
         Relationships: []
       }
+      regulation_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          id: string
+          search_vector: unknown
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          id?: string
+          search_vector?: unknown
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          search_vector?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regulation_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "regulation_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regulation_documents: {
+        Row: {
+          chunk_count: number
+          competitor_id: string
+          created_at: string
+          file_path: string | null
+          id: string
+          source_url: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          chunk_count?: number
+          competitor_id: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          source_url?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          chunk_count?: number
+          competitor_id?: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          source_url?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regulation_documents_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       statement_cache: {
         Row: {
           created_at: string
@@ -195,6 +271,22 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_regulations: {
+        Args: {
+          competitor_ids?: string[]
+          max_results?: number
+          query_text: string
+        }
+        Returns: {
+          chunk_id: string
+          competitor_id: string
+          competitor_name: string
+          content: string
+          document_id: string
+          document_title: string
+          rank: number
+        }[]
       }
     }
     Enums: {
