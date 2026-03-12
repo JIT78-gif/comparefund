@@ -1,38 +1,44 @@
 
 
-## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
+# Auto-Fetch Regulations from Fundos.NET
 
-### Problem
-The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
+## Discovery
 
-```typescript
-const isVirtual = account.id.startsWith("_");
-const value = isVirtual ? 0 : getValue(col.key, account.id);
-```
+I confirmed the FNET API works. Key findings:
+- **List endpoint**: `GET https://fnet.bmfbovespa.com.br/fnet/publico/pesquisarGerenciadorDocumentosDados` with params `cnpjFundo=CNPJ_DIGITS_ONLY&idCategoriaDocumento=0&situacao=A` returns JSON with document metadata
+- **View endpoint**: `GET https://fnet.bmfbovespa.com.br/fnet/publico/exibirDocumento?cvm=true&id=DOC_ID` returns HTML content of the document
+- Documents have `categoriaDocumento` field — we filter for `"Regulamento"`
+- CNPJ must be digits only (no dots/dashes), and `tipoFundo` param must be omitted for FIDC
 
-All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
+## Plan
 
-### Changes
+### 1. New Edge Function: `fnet-fetch`
+- Takes `competitor_id` as input
+- Looks up all active CNPJs for that competitor from `competitor_cnpjs` table
+- For each CNPJ, calls the FNET API to list all documents
+- Filters results where `categoriaDocumento === "Regulamento"`
+- Skips documents already ingested (checks `regulation_documents.source_url`)
+- For each new regulation document:
+  - Fetches HTML content via `exibirDocumento?cvm=true&id=DOC_ID`
+  - Strips HTML tags to extract text
+  - Chunks text (~500 tokens, 50 overlap)
+  - Inserts into `regulation_documents` + `regulation_chunks`
+- Returns summary: how many found, how many new, how many ingested
 
-**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
-- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
+### 2. Admin UI Update (`Admin.tsx`)
+- Add "Auto-Fetch from FNET" button next to the manual ingestion form
+- Shows per-competitor fetch button or a "Fetch All" button
+- Displays progress/status during fetch
+- After completion, refreshes the documents list
 
-**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
-- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
-- For rate columns (Tab IX), compute average instead of sum
-- Pass the tree structure to look up children
-
-**3. `src/components/Navbar.tsx`** — Add missing nav link
-- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
-- Rename "HOME" to "DASHBOARD"
-
-**4. `src/index.css`** — Switch body font
-- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
-- Keep `font-mono` utility class for numeric table cells only
+### 3. Config Update (`supabase/config.toml`)
+- Add `[functions.fnet-fetch]` with `verify_jwt = false`
 
 ### Files
-- `src/lib/account-tree.ts` — add child lookup helper
-- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
-- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
-- `src/index.css` — change body font to Inter
+
+| File | Action |
+|------|--------|
+| `supabase/functions/fnet-fetch/index.ts` | New edge function |
+| `supabase/config.toml` | Add function entry |
+| `src/pages/Admin.tsx` | Add auto-fetch button to RegulationsAdmin |
 
