@@ -333,6 +333,41 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
+async function fetchJsonWithRetry(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+  maxAttempts: number,
+): Promise<Record<string, unknown>> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(input, init, timeoutMs);
+      if (!response.ok) {
+        throw new Error(`FNET list failed: HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      await wait(250 * attempt);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Unknown FNET fetch error");
+}
+
+function normalizeText(value: string | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
 async function safeJson(req: Request): Promise<Record<string, unknown>> {
   try {
     return await req.json();
