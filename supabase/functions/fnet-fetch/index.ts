@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
             break;
           }
 
-          if (!hasExecutionTime(startedAt)) {
+          if (!hasExecutionTime(startedAt, MIN_REMAINING_FOR_DOC_MS)) {
             stoppedEarly = true;
             errors.push(`Stopped early while processing ${cnpjDigits}; run again to continue.`);
             break;
