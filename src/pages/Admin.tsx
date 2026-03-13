@@ -1036,38 +1036,49 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
     let totalIngested = 0;
     const failedCompetitors: string[] = [];
 
-    for (const comp of competitors) {
-      const { data, error } = await supabase.functions.invoke("fnet-fetch", {
-        body: { competitor_id: comp.id },
-      });
+    try {
+      for (const comp of competitors) {
+        try {
+          const { data, error } = await supabase.functions.invoke("fnet-fetch", {
+            body: {
+              competitor_id: comp.id,
+              max_docs_per_cnpj: 2,
+              max_total_docs: 6,
+            },
+          });
 
-      if (error) {
-        failedCompetitors.push(`${comp.name}: ${error.message}`);
-        continue;
+          if (error) {
+            failedCompetitors.push(`${comp.name}: ${error.message}`);
+            continue;
+          }
+
+          totalIngested += data?.total_ingested || 0;
+
+          if (data?.errors?.length) {
+            console.warn(`FNET fetch warnings for ${comp.name}:`, data.errors);
+          }
+        } catch (err) {
+          failedCompetitors.push(`${comp.name}: ${err instanceof Error ? err.message : "Unknown error"}`);
+        }
       }
 
-      totalIngested += data?.total_ingested || 0;
-
-      if (data?.errors?.length) {
-        console.warn(`FNET fetch warnings for ${comp.name}:`, data.errors);
+      if (failedCompetitors.length > 0) {
+        toast({
+          title: "FNET Fetch All finished with issues",
+          description: failedCompetitors.join(" | "),
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "FNET Fetch All Complete",
+          description: `Ingested ${totalIngested} new regulations across all competitors.`,
+        });
       }
-    }
 
-    if (failedCompetitors.length > 0) {
-      toast({
-        title: "FNET Fetch All finished with issues",
-        description: failedCompetitors.join(" | "),
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "FNET Fetch All Complete",
-        description: `Ingested ${totalIngested} new regulations across all competitors.`,
-      });
+      queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
+    } finally {
+      setFnetFetching(null);
     }
-
-    queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
-    setFnetFetching(null);
   };
 
   return (
