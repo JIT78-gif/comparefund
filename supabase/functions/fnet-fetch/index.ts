@@ -8,7 +8,10 @@ const FNET_DOC_URL =
 
 const DEFAULT_MAX_DOCS_PER_CNPJ = 8;
 const DEFAULT_MAX_TOTAL_DOCS = 25;
+const DEFAULT_LIST_PAGE_SIZE = 80;
 const FETCH_TIMEOUT_MS = 45000;
+const LIST_FETCH_TIMEOUT_MS = 20000;
+const MAX_LIST_FETCH_RETRIES = 3;
 
 type FnetDoc = {
   id: number | string;
