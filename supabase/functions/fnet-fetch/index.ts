@@ -99,6 +99,8 @@ Deno.serve(async (req) => {
 
     const existingUrls = new Set((existingDocs || []).map((d) => d.source_url));
 
+    const startedAt = Date.now();
+
     let totalFound = 0;
     let totalNew = 0;
     let totalIngested = 0;
@@ -111,10 +113,16 @@ Deno.serve(async (req) => {
         break;
       }
 
+      if (!hasExecutionTime(startedAt)) {
+        stoppedEarly = true;
+        errors.push("Stopped early to avoid timeout; run Auto-Fetch again to continue.");
+        break;
+      }
+
       const cnpjDigits = cnpjRow.cnpj.replace(/[.\-\/]/g, "");
 
       try {
-        const fnetDocs = await fetchRegulationsFromFnet(cnpjDigits);
+        const fnetDocs = await fetchRegulationsFromFnet(cnpjDigits, startedAt);
         totalFound += fnetDocs.length;
 
         let processedForCnpj = 0;
@@ -122,6 +130,12 @@ Deno.serve(async (req) => {
         for (const reg of fnetDocs) {
           if (processedForCnpj >= maxDocsPerCnpj || totalNew >= maxTotalDocs) {
             stoppedEarly = true;
+            break;
+          }
+
+          if (!hasExecutionTime(startedAt)) {
+            stoppedEarly = true;
+            errors.push(`Stopped early while processing ${cnpjDigits}; run again to continue.`);
             break;
           }
 
@@ -141,6 +155,7 @@ Deno.serve(async (req) => {
             reg,
             sourceUrl,
             docId,
+            startedAt,
           });
 
           if (ingestResult.ok) {
@@ -151,11 +166,13 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) {
-        errors.push(
-          `Error fetching FNET for ${cnpjDigits}: ${
-            err instanceof Error ? err.message : "unknown"
-          }`,
-        );
+        const message = err instanceof Error ? err.message : "unknown";
+        errors.push(`Error fetching FNET for ${cnpjDigits}: ${message}`);
+
+        if (message.includes("Execution budget reached")) {
+          stoppedEarly = true;
+          break;
+        }
       }
     }
 
