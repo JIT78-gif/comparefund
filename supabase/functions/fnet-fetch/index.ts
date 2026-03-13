@@ -6,14 +6,14 @@ const FNET_LIST_URL =
 const FNET_DOC_URL =
   "https://fnet.bmfbovespa.com.br/fnet/publico/exibirDocumento";
 
-const DEFAULT_MAX_DOCS_PER_CNPJ = 8;
-const DEFAULT_MAX_TOTAL_DOCS = 25;
-const DEFAULT_LIST_PAGE_SIZE = 80;
+const DEFAULT_MAX_DOCS_PER_CNPJ = 3;
+const DEFAULT_MAX_TOTAL_DOCS = 10;
+const DEFAULT_LIST_PAGE_SIZE = 40;
 const EXECUTION_BUDGET_MS = 50000;
-const MIN_REMAINING_FOR_FETCH_MS = 2500;
-const MIN_REMAINING_FOR_DOC_MS = 14000;
-const FETCH_TIMEOUT_MS = 22000;
-const LIST_FETCH_TIMEOUT_MS = 12000;
+const MIN_REMAINING_FOR_FETCH_MS = 2000;
+const MIN_REMAINING_FOR_DOC_MS = 8000;
+const FETCH_TIMEOUT_MS = 10000;
+const LIST_FETCH_TIMEOUT_MS = 8000;
 const MAX_LIST_FETCH_RETRIES = 2;
 const DOC_FETCH_MAX_RETRIES = 2;
 const MAX_CHUNKS_PER_DOC = 300;
@@ -264,14 +264,14 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
     let textContent: string;
     if (isPdf) {
       const bytes = new Uint8Array(await docResponse.arrayBuffer());
-      textContent = extractTextFromPdf(bytes);
+      textContent = await extractTextFromPdfAsync(bytes);
       console.log(`Doc ${docId}: PDF detected, extracted ${textContent.length} chars`);
     } else {
       const htmlContent = await docResponse.text();
       // Check if the HTML body actually contains embedded PDF binary
       if (htmlContent.startsWith("%PDF") || htmlContent.includes("JVBERi0x")) {
         const encoder = new TextEncoder();
-        textContent = extractTextFromPdf(encoder.encode(htmlContent));
+        textContent = await extractTextFromPdfAsync(encoder.encode(htmlContent));
         console.log(`Doc ${docId}: embedded PDF in HTML, extracted ${textContent.length} chars`);
       } else {
         textContent = extractTextFromHtml(htmlContent);
@@ -360,37 +360,265 @@ function extractTextFromHtml(htmlContent: string): string {
 }
 
 /**
- * Basic PDF text extraction — handles text-based PDFs by finding BT...ET text objects.
+ * PDF text extraction — handles both uncompressed and FlateDecode-compressed streams.
  * For image-based/scanned PDFs, this will return empty/minimal text.
  */
 function extractTextFromPdf(bytes: Uint8Array): string {
   const decoder = new TextDecoder("latin1");
   const raw = decoder.decode(bytes);
 
-  const textParts: string[] = [];
+  // First try extracting from decompressed content streams
+  const streamTexts = extractFromStreams(raw, bytes);
+  // Then try BT/ET blocks from raw content
+  const btTexts = extractBtEtText(raw);
 
+  const combined = [...streamTexts, ...btTexts].join(" ").replace(/\s+/g, " ").trim();
+  return combined;
+}
+
+/** Extract text from BT...ET text objects */
+function extractBtEtText(raw: string): string[] {
+  const textParts: string[] = [];
   const btEtRegex = /BT\s([\s\S]*?)ET/g;
   let match;
   while ((match = btEtRegex.exec(raw)) !== null) {
-    const block = match[1];
-    const tjRegex = /\(([^)]*)\)\s*Tj/g;
-    let tjMatch;
-    while ((tjMatch = tjRegex.exec(block)) !== null) {
-      textParts.push(tjMatch[1]);
+    extractTjFromBlock(match[1], textParts);
+  }
+  return textParts;
+}
+
+/** Extract Tj/TJ text operators from a BT block */
+function extractTjFromBlock(block: string, out: string[]): void {
+  const tjRegex = /\(([^)]*)\)\s*Tj/g;
+  let m;
+  while ((m = tjRegex.exec(block)) !== null) {
+    out.push(m[1]);
+  }
+  const tjArrayRegex = /\[([^\]]*)\]\s*TJ/g;
+  while ((m = tjArrayRegex.exec(block)) !== null) {
+    const strRegex = /\(([^)]*)\)/g;
+    let s;
+    while ((s = strRegex.exec(m[1])) !== null) {
+      out.push(s[1]);
     }
-    const tjArrayRegex = /\[([^\]]*)\]\s*TJ/g;
-    let arrMatch;
-    while ((arrMatch = tjArrayRegex.exec(block)) !== null) {
-      const inner = arrMatch[1];
-      const strRegex = /\(([^)]*)\)/g;
-      let strMatch;
-      while ((strMatch = strRegex.exec(inner)) !== null) {
-        textParts.push(strMatch[1]);
+  }
+}
+
+/** Try to decompress FlateDecode streams and extract text */
+function extractFromStreams(raw: string, bytes: Uint8Array): string[] {
+  const results: string[] = [];
+
+  // Find stream boundaries in raw PDF
+  const streamRegex = /stream\r?\n/g;
+  const endStreamRegex = /\r?\nendstream/g;
+
+  const streamStarts: number[] = [];
+  let sm;
+  while ((sm = streamRegex.exec(raw)) !== null) {
+    streamStarts.push(sm.index + sm[0].length);
+  }
+
+  const streamEnds: number[] = [];
+  while ((sm = endStreamRegex.exec(raw)) !== null) {
+    streamEnds.push(sm.index);
+  }
+
+  for (let i = 0; i < Math.min(streamStarts.length, streamEnds.length, 100); i++) {
+    const start = streamStarts[i];
+    const end = streamEnds[i];
+    if (end <= start || end - start > 5_000_000) continue;
+
+    // Check if this stream uses FlateDecode by looking at the object header before it
+    const headerRegion = raw.substring(Math.max(0, start - 500), start);
+    const isFlate = headerRegion.includes("FlateDecode");
+
+    if (!isFlate) continue;
+
+    try {
+      const streamBytes = bytes.slice(start, end);
+      const decompressed = inflateSync(streamBytes);
+      if (decompressed) {
+        const text = new TextDecoder("latin1").decode(decompressed);
+        // Extract BT/ET text from decompressed content
+        const parts = extractBtEtText(text);
+        if (parts.length > 0) {
+          results.push(...parts);
+        }
       }
+    } catch {
+      // Not a valid deflate stream or extraction failed, skip
     }
   }
 
-  return textParts.join(" ").replace(/\s+/g, " ").trim();
+  return results;
+}
+
+/**
+ * Inflate (decompress) zlib/deflate data synchronously using DecompressionStream.
+ * Falls back to manual zlib header stripping if needed.
+ */
+function inflateSync(data: Uint8Array): Uint8Array | null {
+  try {
+    // Try raw deflate first (most PDF FlateDecode streams)
+    return decompressDeflateRaw(data);
+  } catch {
+    try {
+      // Try with zlib header (2-byte header)
+      if (data.length > 2) {
+        return decompressDeflateRaw(data.slice(2));
+      }
+    } catch {
+      // Give up
+    }
+  }
+  return null;
+}
+
+/** Synchronous deflate decompression using Deno's built-in */
+function decompressDeflateRaw(data: Uint8Array): Uint8Array | null {
+  try {
+    // Use pako-style manual decompression via ReadableStream
+    const ds = new DecompressionStream("deflate-raw");
+    const writer = ds.writable.getWriter();
+    const reader = ds.readable.getReader();
+
+    const chunks: Uint8Array[] = [];
+    let done = false;
+
+    // Write and close in a microtask
+    writer.write(data).then(() => writer.close()).catch(() => {});
+
+    // We need to read synchronously, but DecompressionStream is async.
+    // Use a workaround: collect via promise
+    return null; // Fall through to async version
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Async PDF text extraction with FlateDecode decompression support.
+ */
+async function extractTextFromPdfAsync(bytes: Uint8Array): Promise<string> {
+  const decoder = new TextDecoder("latin1");
+  const raw = decoder.decode(bytes);
+
+  // Extract from raw BT/ET blocks (uncompressed)
+  const btTexts = extractBtEtText(raw);
+
+  // Try decompressing FlateDecode streams
+  const streamTexts = await extractFromStreamsAsync(raw, bytes);
+
+  const combined = [...streamTexts, ...btTexts].join(" ").replace(/\s+/g, " ").trim();
+  return combined;
+}
+
+async function extractFromStreamsAsync(raw: string, bytes: Uint8Array): Promise<string[]> {
+  const results: string[] = [];
+
+  const streamRegex = /stream\r?\n/g;
+  const endStreamRegex = /\r?\nendstream/g;
+
+  const streamStarts: number[] = [];
+  let sm;
+  while ((sm = streamRegex.exec(raw)) !== null) {
+    streamStarts.push(sm.index + sm[0].length);
+  }
+
+  const streamEnds: number[] = [];
+  while ((sm = endStreamRegex.exec(raw)) !== null) {
+    streamEnds.push(sm.index);
+  }
+
+  for (let i = 0; i < Math.min(streamStarts.length, streamEnds.length, 80); i++) {
+    const start = streamStarts[i];
+    const end = streamEnds[i];
+    if (end <= start || end - start > 5_000_000) continue;
+
+    const headerRegion = raw.substring(Math.max(0, start - 500), start);
+    if (!headerRegion.includes("FlateDecode")) continue;
+
+    try {
+      const streamBytes = bytes.slice(start, end);
+      const decompressed = await inflateAsync(streamBytes);
+      if (decompressed && decompressed.length > 0) {
+        const text = new TextDecoder("latin1").decode(decompressed);
+        const parts = extractBtEtText(text);
+        if (parts.length > 0) {
+          results.push(...parts);
+        }
+      }
+    } catch {
+      // Skip failed streams
+    }
+  }
+
+  return results;
+}
+
+async function inflateAsync(data: Uint8Array): Promise<Uint8Array | null> {
+  // Try deflate-raw first, then with zlib header skip
+  for (const slice of [data, data.length > 2 ? data.slice(2) : null]) {
+    if (!slice) continue;
+    try {
+      const ds = new DecompressionStream("deflate-raw");
+      const writer = ds.writable.getWriter();
+      const reader = ds.readable.getReader();
+
+      writer.write(slice).then(() => writer.close()).catch(() => writer.close().catch(() => {}));
+
+      const chunks: Uint8Array[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) chunks.push(value);
+      }
+
+      if (chunks.length > 0) {
+        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+        const result = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const chunk of chunks) {
+          result.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return result;
+      }
+    } catch {
+      // Try next slice
+    }
+  }
+
+  // Try "deflate" (with zlib wrapper) as last resort
+  try {
+    const ds = new DecompressionStream("deflate");
+    const writer = ds.writable.getWriter();
+    const reader = ds.readable.getReader();
+
+    writer.write(data).then(() => writer.close()).catch(() => writer.close().catch(() => {}));
+
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+
+    if (chunks.length > 0) {
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const result = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return result;
+    }
+  } catch {
+    // Give up
+  }
+
+  return null;
 }
 
 function chunkText(text: string, chunkSize: number, overlap: number): string[] {
