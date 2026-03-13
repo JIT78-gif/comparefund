@@ -11,9 +11,12 @@ const DEFAULT_MAX_TOTAL_DOCS = 25;
 const DEFAULT_LIST_PAGE_SIZE = 80;
 const EXECUTION_BUDGET_MS = 50000;
 const MIN_REMAINING_FOR_FETCH_MS = 2500;
-const FETCH_TIMEOUT_MS = 18000;
+const MIN_REMAINING_FOR_DOC_MS = 14000;
+const FETCH_TIMEOUT_MS = 22000;
 const LIST_FETCH_TIMEOUT_MS = 12000;
 const MAX_LIST_FETCH_RETRIES = 2;
+const DOC_FETCH_MAX_RETRIES = 2;
+const MAX_CHUNKS_PER_DOC = 300;
 
 type FnetDoc = {
   id: number | string;
@@ -133,7 +136,7 @@ Deno.serve(async (req) => {
             break;
           }
 
-          if (!hasExecutionTime(startedAt)) {
+          if (!hasExecutionTime(startedAt, MIN_REMAINING_FOR_DOC_MS)) {
             stoppedEarly = true;
             errors.push(`Stopped early while processing ${cnpjDigits}; run again to continue.`);
             break;
@@ -166,7 +169,7 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "unknown";
+        const message = errorToMessage(err);
         errors.push(`Error fetching FNET for ${cnpjDigits}: ${message}`);
 
         if (message.includes("Execution budget reached")) {
@@ -250,17 +253,11 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
   let documentId: string | null = null;
 
   try {
-    const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS);
-    if (!timeoutMs) {
+    if (!hasExecutionTime(startedAt, MIN_REMAINING_FOR_DOC_MS)) {
       return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
     }
 
-    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
-    if (!docRes.ok) {
-      return { ok: false, error: `Failed to fetch doc ${docId}: HTTP ${docRes.status}` };
-    }
-
-    const htmlContent = await docRes.text();
+    const htmlContent = await fetchDocumentHtmlWithRetry(docId, startedAt);
     const textContent = extractTextFromHtml(htmlContent);
 
     if (textContent.length < 50) {
@@ -293,7 +290,7 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
 
     documentId = newDoc.id;
 
-    const chunks = chunkText(textContent, 500, 50);
+    const chunks = chunkText(textContent, 500, 50).slice(0, MAX_CHUNKS_PER_DOC);
     const chunkRows = chunks.map((content, index) => ({
       document_id: newDoc.id,
       chunk_index: index,
@@ -324,7 +321,7 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
 
     return {
       ok: false,
-      error: `Error processing doc ${docId}: ${err instanceof Error ? err.message : "unknown"}`,
+      error: `Error processing doc ${docId}: ${errorToMessage(err)}`,
     };
   }
 }
@@ -359,6 +356,34 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
+async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Promise<string> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= DOC_FETCH_MAX_RETRIES; attempt++) {
+    try {
+      const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS, MIN_REMAINING_FOR_DOC_MS);
+      if (!timeoutMs) {
+        throw new Error("Execution budget reached before doc fetch");
+      }
+
+      const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
+      if (!docRes.ok) {
+        throw new Error(`HTTP ${docRes.status}`);
+      }
+
+      return await docRes.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt === DOC_FETCH_MAX_RETRIES) {
+        break;
+      }
+      await wait(350 * attempt);
+    }
+  }
+
+  throw new Error(`doc fetch retries exhausted: ${errorToMessage(lastError)}`);
+}
+
 async function fetchJsonWithRetry(
   input: string,
   init: RequestInit,
@@ -389,7 +414,7 @@ async function fetchJsonWithRetry(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("Unknown FNET fetch error");
+  throw new Error(`Unknown FNET fetch error: ${errorToMessage(lastError)}`);
 }
 
 function normalizeText(value: string | undefined): string {
@@ -420,10 +445,27 @@ function hasExecutionTime(startedAt: number, reserveMs = MIN_REMAINING_FOR_FETCH
   return getRemainingBudgetMs(startedAt) > reserveMs;
 }
 
-function getBudgetAwareTimeout(startedAt: number, desiredTimeoutMs: number): number | null {
+function getBudgetAwareTimeout(
+  startedAt: number,
+  desiredTimeoutMs: number,
+  reserveMs = MIN_REMAINING_FOR_FETCH_MS,
+): number | null {
   const remaining = getRemainingBudgetMs(startedAt) - 1000;
-  if (remaining < MIN_REMAINING_FOR_FETCH_MS) return null;
+  if (remaining < reserveMs) return null;
   return Math.max(1000, Math.min(desiredTimeoutMs, remaining));
+}
+
+function errorToMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "unknown";
+    }
+  }
+  return "unknown";
 }
 
 function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
