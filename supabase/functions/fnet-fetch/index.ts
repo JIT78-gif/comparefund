@@ -241,15 +241,21 @@ type IngestParams = {
   reg: FnetDoc;
   sourceUrl: string;
   docId: string;
+  startedAt: number;
 };
 
 async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { adminClient, competitorId, cnpjDigits, fundName, reg, sourceUrl, docId } = params;
+  const { adminClient, competitorId, cnpjDigits, fundName, reg, sourceUrl, docId, startedAt } = params;
 
   let documentId: string | null = null;
 
   try {
-    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`);
+    const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS);
+    if (!timeoutMs) {
+      return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
+    }
+
+    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
     if (!docRes.ok) {
       return { ok: false, error: `Failed to fetch doc ${docId}: HTTP ${docRes.status}` };
     }
