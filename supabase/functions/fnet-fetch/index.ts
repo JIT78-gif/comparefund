@@ -408,7 +408,7 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
-async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Promise<string> {
+async function fetchDocumentWithRetry(docId: string, startedAt: number): Promise<Response> {
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= DOC_FETCH_MAX_RETRIES; attempt++) {
@@ -423,7 +423,7 @@ async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Pro
         throw new Error(`HTTP ${docRes.status}`);
       }
 
-      return await docRes.text();
+      return docRes;
     } catch (error) {
       lastError = error;
       if (attempt === DOC_FETCH_MAX_RETRIES) {
