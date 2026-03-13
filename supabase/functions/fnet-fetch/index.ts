@@ -264,14 +264,14 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
     let textContent: string;
     if (isPdf) {
       const bytes = new Uint8Array(await docResponse.arrayBuffer());
-      textContent = extractTextFromPdf(bytes);
+      textContent = await extractTextFromPdfAsync(bytes);
       console.log(`Doc ${docId}: PDF detected, extracted ${textContent.length} chars`);
     } else {
       const htmlContent = await docResponse.text();
       // Check if the HTML body actually contains embedded PDF binary
       if (htmlContent.startsWith("%PDF") || htmlContent.includes("JVBERi0x")) {
         const encoder = new TextEncoder();
-        textContent = extractTextFromPdf(encoder.encode(htmlContent));
+        textContent = await extractTextFromPdfAsync(encoder.encode(htmlContent));
         console.log(`Doc ${docId}: embedded PDF in HTML, extracted ${textContent.length} chars`);
       } else {
         textContent = extractTextFromHtml(htmlContent);
