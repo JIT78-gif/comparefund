@@ -321,7 +321,7 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
 
     return {
       ok: false,
-      error: `Error processing doc ${docId}: ${err instanceof Error ? err.message : "unknown"}`,
+      error: `Error processing doc ${docId}: ${errorToMessage(err)}`,
     };
   }
 }
