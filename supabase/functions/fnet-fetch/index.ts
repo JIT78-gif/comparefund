@@ -356,6 +356,34 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
+async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Promise<string> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= DOC_FETCH_MAX_RETRIES; attempt++) {
+    try {
+      const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS, MIN_REMAINING_FOR_DOC_MS);
+      if (!timeoutMs) {
+        throw new Error("Execution budget reached before doc fetch");
+      }
+
+      const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
+      if (!docRes.ok) {
+        throw new Error(`HTTP ${docRes.status}`);
+      }
+
+      return await docRes.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt === DOC_FETCH_MAX_RETRIES) {
+        break;
+      }
+      await wait(350 * attempt);
+    }
+  }
+
+  throw new Error(`doc fetch retries exhausted: ${errorToMessage(lastError)}`);
+}
+
 async function fetchJsonWithRetry(
   input: string,
   init: RequestInit,
