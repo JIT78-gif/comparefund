@@ -253,17 +253,11 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
   let documentId: string | null = null;
 
   try {
-    const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS);
-    if (!timeoutMs) {
+    if (!hasExecutionTime(startedAt, MIN_REMAINING_FOR_DOC_MS)) {
       return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
     }
 
-    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
-    if (!docRes.ok) {
-      return { ok: false, error: `Failed to fetch doc ${docId}: HTTP ${docRes.status}` };
-    }
-
-    const htmlContent = await docRes.text();
+    const htmlContent = await fetchDocumentHtmlWithRetry(docId, startedAt);
     const textContent = extractTextFromHtml(htmlContent);
 
     if (textContent.length < 50) {
