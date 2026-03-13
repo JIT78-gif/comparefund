@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> {
+async function fetchRegulationsFromFnet(cnpjDigits: string, startedAt: number): Promise<FnetDoc[]> {
   const params = new URLSearchParams({
     d: "0",
     s: "0",
@@ -219,6 +219,7 @@ async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> 
     },
     LIST_FETCH_TIMEOUT_MS,
     MAX_LIST_FETCH_RETRIES,
+    startedAt,
   );
 
   const allDocs = Array.isArray(listData?.data)
