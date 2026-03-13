@@ -1,39 +1,38 @@
 
 
-## Problem: Chat shows "no regulations found" despite documents being ingested
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-### Root Cause
-The FNET document endpoint (`exibirDocumento?cvm=true&id=...`) returns **PDF files embedded in HTML**, not readable HTML text. The current `extractTextFromHtml` function strips HTML tags but the actual content is raw PDF binary data (base64-encoded `%PDF-1.x` headers visible in all chunks). This means:
-- All 21 "ready" documents have **1 chunk each** of garbage binary data
-- The `search_regulations` full-text search finds nothing meaningful
-- Chat correctly reports "no regulations found"
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
-### Plan
+```typescript
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
+```
 
-#### 1. Clean existing malformed data
-- Run a migration to DELETE all `regulation_chunks` and reset all `regulation_documents` to allow re-fetching
-- This clears the garbage binary chunks and removes `source_url` entries so FNET fetch treats them as new
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-#### 2. Fix `fnet-fetch` to handle PDF responses properly
-The FNET endpoint returns PDF binary when `cvm=true`. Two changes needed:
+### Changes
 
-**a) Detect PDF responses and use a text extraction approach:**
-- Check `Content-Type` header for `application/pdf`
-- If PDF, read as `ArrayBuffer` and apply the same `extractTextFromPdf` logic already in `rag-ingest`
-- If HTML, use existing `extractTextFromHtml`
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-**b) Copy `extractTextFromPdf` from `rag-ingest` into `fnet-fetch`:**
-- The function already exists in `rag-ingest/index.ts` (lines 200-231)
-- Replicate it in `fnet-fetch/index.ts`
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
 
-#### 3. Validate chunk quality
-- After PDF text extraction, check if extracted text length > 50 chars (already exists)
-- Log a warning if extraction yields minimal text (image-based PDF)
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
 
-### Files to modify
-- `supabase/functions/fnet-fetch/index.ts` — add PDF detection + `extractTextFromPdf` function
-- Database migration — delete all existing regulation_chunks and regulation_documents to allow clean refetch
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
 
-### Technical detail
-The `extractTextFromPdf` function parses raw PDF binary by finding `BT...ET` text objects and extracting `Tj`/`TJ` operators. This works for text-based PDFs but will fail for scanned/image PDFs (which would need OCR, out of scope).
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 

@@ -257,8 +257,26 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
       return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
     }
 
-    const htmlContent = await fetchDocumentHtmlWithRetry(docId, startedAt);
-    const textContent = extractTextFromHtml(htmlContent);
+    const docResponse = await fetchDocumentWithRetry(docId, startedAt);
+    const contentType = docResponse.headers.get("content-type") || "";
+    const isPdf = contentType.includes("application/pdf");
+
+    let textContent: string;
+    if (isPdf) {
+      const bytes = new Uint8Array(await docResponse.arrayBuffer());
+      textContent = extractTextFromPdf(bytes);
+      console.log(`Doc ${docId}: PDF detected, extracted ${textContent.length} chars`);
+    } else {
+      const htmlContent = await docResponse.text();
+      // Check if the HTML body actually contains embedded PDF binary
+      if (htmlContent.startsWith("%PDF") || htmlContent.includes("JVBERi0x")) {
+        const encoder = new TextEncoder();
+        textContent = extractTextFromPdf(encoder.encode(htmlContent));
+        console.log(`Doc ${docId}: embedded PDF in HTML, extracted ${textContent.length} chars`);
+      } else {
+        textContent = extractTextFromHtml(htmlContent);
+      }
+    }
 
     if (textContent.length < 50) {
       return {
@@ -341,6 +359,40 @@ function extractTextFromHtml(htmlContent: string): string {
     .trim();
 }
 
+/**
+ * Basic PDF text extraction — handles text-based PDFs by finding BT...ET text objects.
+ * For image-based/scanned PDFs, this will return empty/minimal text.
+ */
+function extractTextFromPdf(bytes: Uint8Array): string {
+  const decoder = new TextDecoder("latin1");
+  const raw = decoder.decode(bytes);
+
+  const textParts: string[] = [];
+
+  const btEtRegex = /BT\s([\s\S]*?)ET/g;
+  let match;
+  while ((match = btEtRegex.exec(raw)) !== null) {
+    const block = match[1];
+    const tjRegex = /\(([^)]*)\)\s*Tj/g;
+    let tjMatch;
+    while ((tjMatch = tjRegex.exec(block)) !== null) {
+      textParts.push(tjMatch[1]);
+    }
+    const tjArrayRegex = /\[([^\]]*)\]\s*TJ/g;
+    let arrMatch;
+    while ((arrMatch = tjArrayRegex.exec(block)) !== null) {
+      const inner = arrMatch[1];
+      const strRegex = /\(([^)]*)\)/g;
+      let strMatch;
+      while ((strMatch = strRegex.exec(inner)) !== null) {
+        textParts.push(strMatch[1]);
+      }
+    }
+  }
+
+  return textParts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   const words = text.split(/\s+/);
   if (words.length <= chunkSize) return [text];
@@ -356,7 +408,7 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
-async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Promise<string> {
+async function fetchDocumentWithRetry(docId: string, startedAt: number): Promise<Response> {
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= DOC_FETCH_MAX_RETRIES; attempt++) {
@@ -371,7 +423,7 @@ async function fetchDocumentHtmlWithRetry(docId: string, startedAt: number): Pro
         throw new Error(`HTTP ${docRes.status}`);
       }
 
-      return await docRes.text();
+      return docRes;
     } catch (error) {
       lastError = error;
       if (attempt === DOC_FETCH_MAX_RETRIES) {
