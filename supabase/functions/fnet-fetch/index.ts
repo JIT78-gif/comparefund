@@ -341,6 +341,40 @@ function extractTextFromHtml(htmlContent: string): string {
     .trim();
 }
 
+/**
+ * Basic PDF text extraction — handles text-based PDFs by finding BT...ET text objects.
+ * For image-based/scanned PDFs, this will return empty/minimal text.
+ */
+function extractTextFromPdf(bytes: Uint8Array): string {
+  const decoder = new TextDecoder("latin1");
+  const raw = decoder.decode(bytes);
+
+  const textParts: string[] = [];
+
+  const btEtRegex = /BT\s([\s\S]*?)ET/g;
+  let match;
+  while ((match = btEtRegex.exec(raw)) !== null) {
+    const block = match[1];
+    const tjRegex = /\(([^)]*)\)\s*Tj/g;
+    let tjMatch;
+    while ((tjMatch = tjRegex.exec(block)) !== null) {
+      textParts.push(tjMatch[1]);
+    }
+    const tjArrayRegex = /\[([^\]]*)\]\s*TJ/g;
+    let arrMatch;
+    while ((arrMatch = tjArrayRegex.exec(block)) !== null) {
+      const inner = arrMatch[1];
+      const strRegex = /\(([^)]*)\)/g;
+      let strMatch;
+      while ((strMatch = strRegex.exec(inner)) !== null) {
+        textParts.push(strMatch[1]);
+      }
+    }
+  }
+
+  return textParts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   const words = text.split(/\s+/);
   if (words.length <= chunkSize) return [text];
