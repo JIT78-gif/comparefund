@@ -182,25 +182,35 @@ async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> 
   const params = new URLSearchParams({
     d: "0",
     s: "0",
-    l: "200",
+    l: String(DEFAULT_LIST_PAGE_SIZE),
     o: '[{"dataReferencia":"desc"}]',
     cnpjFundo: cnpjDigits,
     idCategoriaDocumento: "0",
     situacao: "A",
   });
 
-  const listRes = await fetchWithTimeout(`${FNET_LIST_URL}?${params}`, {
-    headers: { Accept: "application/json" },
-  });
+  const listData = await fetchJsonWithRetry(
+    `${FNET_LIST_URL}?${params}`,
+    {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (compatible; LovableCloud/1.0)",
+        Referer: "https://fnet.bmfbovespa.com.br/",
+      },
+    },
+    LIST_FETCH_TIMEOUT_MS,
+    MAX_LIST_FETCH_RETRIES,
+  );
 
-  if (!listRes.ok) {
-    throw new Error(`FNET list failed: HTTP ${listRes.status}`);
-  }
+  const allDocs = Array.isArray(listData?.data)
+    ? listData.data
+    : Array.isArray(listData?.dados)
+      ? listData.dados
+      : [];
 
-  const listData = await listRes.json();
-  const allDocs = Array.isArray(listData?.dados) ? listData.dados : [];
-
-  return allDocs.filter((doc: FnetDoc) => doc.categoriaDocumento === "Regulamento");
+  return allDocs.filter(
+    (doc: FnetDoc) => normalizeText(doc.categoriaDocumento) === "regulamento",
+  );
 }
 
 type IngestParams = {
