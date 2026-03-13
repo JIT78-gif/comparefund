@@ -412,6 +412,20 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getRemainingBudgetMs(startedAt: number): number {
+  return EXECUTION_BUDGET_MS - (Date.now() - startedAt);
+}
+
+function hasExecutionTime(startedAt: number, reserveMs = MIN_REMAINING_FOR_FETCH_MS): boolean {
+  return getRemainingBudgetMs(startedAt) > reserveMs;
+}
+
+function getBudgetAwareTimeout(startedAt: number, desiredTimeoutMs: number): number | null {
+  const remaining = getRemainingBudgetMs(startedAt) - 1000;
+  if (remaining < MIN_REMAINING_FOR_FETCH_MS) return null;
+  return Math.max(1000, Math.min(desiredTimeoutMs, remaining));
+}
+
 function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
