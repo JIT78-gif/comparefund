@@ -364,12 +364,18 @@ async function fetchJsonWithRetry(
   init: RequestInit,
   timeoutMs: number,
   maxAttempts: number,
+  startedAt: number,
 ): Promise<Record<string, unknown>> {
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetchWithTimeout(input, init, timeoutMs);
+      const attemptTimeout = getBudgetAwareTimeout(startedAt, timeoutMs);
+      if (!attemptTimeout) {
+        throw new Error("Execution budget reached before FNET list fetch");
+      }
+
+      const response = await fetchWithTimeout(input, init, attemptTimeout);
       if (!response.ok) {
         throw new Error(`FNET list failed: HTTP ${response.status}`);
       }
