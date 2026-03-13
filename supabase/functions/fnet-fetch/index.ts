@@ -9,9 +9,11 @@ const FNET_DOC_URL =
 const DEFAULT_MAX_DOCS_PER_CNPJ = 8;
 const DEFAULT_MAX_TOTAL_DOCS = 25;
 const DEFAULT_LIST_PAGE_SIZE = 80;
-const FETCH_TIMEOUT_MS = 45000;
-const LIST_FETCH_TIMEOUT_MS = 20000;
-const MAX_LIST_FETCH_RETRIES = 3;
+const EXECUTION_BUDGET_MS = 50000;
+const MIN_REMAINING_FOR_FETCH_MS = 2500;
+const FETCH_TIMEOUT_MS = 18000;
+const LIST_FETCH_TIMEOUT_MS = 12000;
+const MAX_LIST_FETCH_RETRIES = 2;
 
 type FnetDoc = {
   id: number | string;
@@ -97,6 +99,8 @@ Deno.serve(async (req) => {
 
     const existingUrls = new Set((existingDocs || []).map((d) => d.source_url));
 
+    const startedAt = Date.now();
+
     let totalFound = 0;
     let totalNew = 0;
     let totalIngested = 0;
@@ -109,10 +113,16 @@ Deno.serve(async (req) => {
         break;
       }
 
+      if (!hasExecutionTime(startedAt)) {
+        stoppedEarly = true;
+        errors.push("Stopped early to avoid timeout; run Auto-Fetch again to continue.");
+        break;
+      }
+
       const cnpjDigits = cnpjRow.cnpj.replace(/[.\-\/]/g, "");
 
       try {
-        const fnetDocs = await fetchRegulationsFromFnet(cnpjDigits);
+        const fnetDocs = await fetchRegulationsFromFnet(cnpjDigits, startedAt);
         totalFound += fnetDocs.length;
 
         let processedForCnpj = 0;
@@ -120,6 +130,12 @@ Deno.serve(async (req) => {
         for (const reg of fnetDocs) {
           if (processedForCnpj >= maxDocsPerCnpj || totalNew >= maxTotalDocs) {
             stoppedEarly = true;
+            break;
+          }
+
+          if (!hasExecutionTime(startedAt)) {
+            stoppedEarly = true;
+            errors.push(`Stopped early while processing ${cnpjDigits}; run again to continue.`);
             break;
           }
 
@@ -139,6 +155,7 @@ Deno.serve(async (req) => {
             reg,
             sourceUrl,
             docId,
+            startedAt,
           });
 
           if (ingestResult.ok) {
@@ -149,11 +166,13 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) {
-        errors.push(
-          `Error fetching FNET for ${cnpjDigits}: ${
-            err instanceof Error ? err.message : "unknown"
-          }`,
-        );
+        const message = err instanceof Error ? err.message : "unknown";
+        errors.push(`Error fetching FNET for ${cnpjDigits}: ${message}`);
+
+        if (message.includes("Execution budget reached")) {
+          stoppedEarly = true;
+          break;
+        }
       }
     }
 
@@ -178,7 +197,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> {
+async function fetchRegulationsFromFnet(cnpjDigits: string, startedAt: number): Promise<FnetDoc[]> {
   const params = new URLSearchParams({
     d: "0",
     s: "0",
@@ -200,6 +219,7 @@ async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> 
     },
     LIST_FETCH_TIMEOUT_MS,
     MAX_LIST_FETCH_RETRIES,
+    startedAt,
   );
 
   const allDocs = Array.isArray(listData?.data)
@@ -221,15 +241,21 @@ type IngestParams = {
   reg: FnetDoc;
   sourceUrl: string;
   docId: string;
+  startedAt: number;
 };
 
 async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { adminClient, competitorId, cnpjDigits, fundName, reg, sourceUrl, docId } = params;
+  const { adminClient, competitorId, cnpjDigits, fundName, reg, sourceUrl, docId, startedAt } = params;
 
   let documentId: string | null = null;
 
   try {
-    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`);
+    const timeoutMs = getBudgetAwareTimeout(startedAt, FETCH_TIMEOUT_MS);
+    if (!timeoutMs) {
+      return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
+    }
+
+    const docRes = await fetchWithTimeout(`${FNET_DOC_URL}?cvm=true&id=${docId}`, undefined, timeoutMs);
     if (!docRes.ok) {
       return { ok: false, error: `Failed to fetch doc ${docId}: HTTP ${docRes.status}` };
     }
@@ -338,12 +364,18 @@ async function fetchJsonWithRetry(
   init: RequestInit,
   timeoutMs: number,
   maxAttempts: number,
+  startedAt: number,
 ): Promise<Record<string, unknown>> {
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetchWithTimeout(input, init, timeoutMs);
+      const attemptTimeout = getBudgetAwareTimeout(startedAt, timeoutMs);
+      if (!attemptTimeout) {
+        throw new Error("Execution budget reached before FNET list fetch");
+      }
+
+      const response = await fetchWithTimeout(input, init, attemptTimeout);
       if (!response.ok) {
         throw new Error(`FNET list failed: HTTP ${response.status}`);
       }
@@ -378,6 +410,20 @@ async function safeJson(req: Request): Promise<Record<string, unknown>> {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRemainingBudgetMs(startedAt: number): number {
+  return EXECUTION_BUDGET_MS - (Date.now() - startedAt);
+}
+
+function hasExecutionTime(startedAt: number, reserveMs = MIN_REMAINING_FOR_FETCH_MS): boolean {
+  return getRemainingBudgetMs(startedAt) > reserveMs;
+}
+
+function getBudgetAwareTimeout(startedAt: number, desiredTimeoutMs: number): number | null {
+  const remaining = getRemainingBudgetMs(startedAt) - 1000;
+  if (remaining < MIN_REMAINING_FOR_FETCH_MS) return null;
+  return Math.max(1000, Math.min(desiredTimeoutMs, remaining));
 }
 
 function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
