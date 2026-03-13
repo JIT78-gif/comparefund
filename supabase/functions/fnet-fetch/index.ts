@@ -257,8 +257,26 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
       return { ok: false, error: `Skipped doc ${docId}: execution budget reached` };
     }
 
-    const htmlContent = await fetchDocumentHtmlWithRetry(docId, startedAt);
-    const textContent = extractTextFromHtml(htmlContent);
+    const docResponse = await fetchDocumentWithRetry(docId, startedAt);
+    const contentType = docResponse.headers.get("content-type") || "";
+    const isPdf = contentType.includes("application/pdf");
+
+    let textContent: string;
+    if (isPdf) {
+      const bytes = new Uint8Array(await docResponse.arrayBuffer());
+      textContent = extractTextFromPdf(bytes);
+      console.log(`Doc ${docId}: PDF detected, extracted ${textContent.length} chars`);
+    } else {
+      const htmlContent = await docResponse.text();
+      // Check if the HTML body actually contains embedded PDF binary
+      if (htmlContent.startsWith("%PDF") || htmlContent.includes("JVBERi0x")) {
+        const encoder = new TextEncoder();
+        textContent = extractTextFromPdf(encoder.encode(htmlContent));
+        console.log(`Doc ${docId}: embedded PDF in HTML, extracted ${textContent.length} chars`);
+      } else {
+        textContent = extractTextFromHtml(htmlContent);
+      }
+    }
 
     if (textContent.length < 50) {
       return {
