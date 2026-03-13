@@ -8,7 +8,10 @@ const FNET_DOC_URL =
 
 const DEFAULT_MAX_DOCS_PER_CNPJ = 8;
 const DEFAULT_MAX_TOTAL_DOCS = 25;
+const DEFAULT_LIST_PAGE_SIZE = 80;
 const FETCH_TIMEOUT_MS = 45000;
+const LIST_FETCH_TIMEOUT_MS = 20000;
+const MAX_LIST_FETCH_RETRIES = 3;
 
 type FnetDoc = {
   id: number | string;
@@ -179,25 +182,35 @@ async function fetchRegulationsFromFnet(cnpjDigits: string): Promise<FnetDoc[]> 
   const params = new URLSearchParams({
     d: "0",
     s: "0",
-    l: "200",
+    l: String(DEFAULT_LIST_PAGE_SIZE),
     o: '[{"dataReferencia":"desc"}]',
     cnpjFundo: cnpjDigits,
     idCategoriaDocumento: "0",
     situacao: "A",
   });
 
-  const listRes = await fetchWithTimeout(`${FNET_LIST_URL}?${params}`, {
-    headers: { Accept: "application/json" },
-  });
+  const listData = await fetchJsonWithRetry(
+    `${FNET_LIST_URL}?${params}`,
+    {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (compatible; LovableCloud/1.0)",
+        Referer: "https://fnet.bmfbovespa.com.br/",
+      },
+    },
+    LIST_FETCH_TIMEOUT_MS,
+    MAX_LIST_FETCH_RETRIES,
+  );
 
-  if (!listRes.ok) {
-    throw new Error(`FNET list failed: HTTP ${listRes.status}`);
-  }
+  const allDocs = Array.isArray(listData?.data)
+    ? listData.data
+    : Array.isArray(listData?.dados)
+      ? listData.dados
+      : [];
 
-  const listData = await listRes.json();
-  const allDocs = Array.isArray(listData?.dados) ? listData.dados : [];
-
-  return allDocs.filter((doc: FnetDoc) => doc.categoriaDocumento === "Regulamento");
+  return allDocs.filter(
+    (doc: FnetDoc) => normalizeText(doc.categoriaDocumento) === "regulamento",
+  );
 }
 
 type IngestParams = {
@@ -320,12 +333,51 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   return chunks;
 }
 
+async function fetchJsonWithRetry(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+  maxAttempts: number,
+): Promise<Record<string, unknown>> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(input, init, timeoutMs);
+      if (!response.ok) {
+        throw new Error(`FNET list failed: HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      await wait(250 * attempt);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Unknown FNET fetch error");
+}
+
+function normalizeText(value: string | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
 async function safeJson(req: Request): Promise<Record<string, unknown>> {
   try {
     return await req.json();
   } catch {
     return {};
   }
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
