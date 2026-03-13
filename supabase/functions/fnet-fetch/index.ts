@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "unknown";
+        const message = errorToMessage(err);
         errors.push(`Error fetching FNET for ${cnpjDigits}: ${message}`);
 
         if (message.includes("Execution budget reached")) {
