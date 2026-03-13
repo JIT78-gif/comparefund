@@ -445,10 +445,27 @@ function hasExecutionTime(startedAt: number, reserveMs = MIN_REMAINING_FOR_FETCH
   return getRemainingBudgetMs(startedAt) > reserveMs;
 }
 
-function getBudgetAwareTimeout(startedAt: number, desiredTimeoutMs: number): number | null {
+function getBudgetAwareTimeout(
+  startedAt: number,
+  desiredTimeoutMs: number,
+  reserveMs = MIN_REMAINING_FOR_FETCH_MS,
+): number | null {
   const remaining = getRemainingBudgetMs(startedAt) - 1000;
-  if (remaining < MIN_REMAINING_FOR_FETCH_MS) return null;
+  if (remaining < reserveMs) return null;
   return Math.max(1000, Math.min(desiredTimeoutMs, remaining));
+}
+
+function errorToMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "unknown";
+    }
+  }
+  return "unknown";
 }
 
 function normalizeLimit(value: unknown, fallback: number, min: number, max: number): number {
