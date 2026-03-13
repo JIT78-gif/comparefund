@@ -290,7 +290,7 @@ async function ingestRegulationDocument(params: IngestParams): Promise<{ ok: tru
 
     documentId = newDoc.id;
 
-    const chunks = chunkText(textContent, 500, 50);
+    const chunks = chunkText(textContent, 500, 50).slice(0, MAX_CHUNKS_PER_DOC);
     const chunkRows = chunks.map((content, index) => ({
       document_id: newDoc.id,
       chunk_index: index,
