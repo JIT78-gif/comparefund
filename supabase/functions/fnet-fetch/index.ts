@@ -414,7 +414,7 @@ async function fetchJsonWithRetry(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("Unknown FNET fetch error");
+  throw new Error(`Unknown FNET fetch error: ${errorToMessage(lastError)}`);
 }
 
 function normalizeText(value: string | undefined): string {
