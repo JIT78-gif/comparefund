@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog, FileText, Download } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog, FileText } from "lucide-react";
 
 interface AuthorizedEmail {
   id: string;
@@ -898,7 +898,6 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
   const [textContent, setTextContent] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [mode, setMode] = useState<"text" | "url" | "file">("text");
-  const [fnetFetching, setFnetFetching] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: documents = [], isLoading: docsLoading } = useQuery({
@@ -1002,125 +1001,13 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
     }
   };
 
-  const handleFnetFetch = async (competitorId: string) => {
-    setFnetFetching(competitorId);
-    try {
-      const { data, error } = await supabase.functions.invoke("fnet-fetch", {
-        body: { competitor_id: competitorId },
-      });
-
-      if (error) throw error;
-
-      const desc = `Found ${data?.total_found ?? 0} regulations, ${data?.total_new ?? 0} new, ${data?.total_ingested ?? 0} ingested.`;
-      toast({ title: "FNET Fetch Complete", description: desc });
-
-      if (data?.errors?.length) {
-        console.warn("FNET fetch errors:", data.errors);
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
-    } catch (err) {
-      toast({
-        title: "FNET fetch failed",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setFnetFetching(null);
-    }
-  };
-
-  const handleFnetFetchAll = async () => {
-    setFnetFetching("all");
-
-    let totalIngested = 0;
-    const failedCompetitors: string[] = [];
-
-    try {
-      for (const comp of competitors) {
-        try {
-          const { data, error } = await supabase.functions.invoke("fnet-fetch", {
-            body: {
-              competitor_id: comp.id,
-              max_docs_per_cnpj: 2,
-              max_total_docs: 6,
-            },
-          });
-
-          if (error) {
-            failedCompetitors.push(`${comp.name}: ${error.message}`);
-            continue;
-          }
-
-          totalIngested += data?.total_ingested || 0;
-
-          if (data?.errors?.length) {
-            console.warn(`FNET fetch warnings for ${comp.name}:`, data.errors);
-          }
-        } catch (err) {
-          failedCompetitors.push(`${comp.name}: ${err instanceof Error ? err.message : "Unknown error"}`);
-        }
-      }
-
-      if (failedCompetitors.length > 0) {
-        toast({
-          title: "FNET Fetch All finished with issues",
-          description: failedCompetitors.join(" | "),
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "FNET Fetch All Complete",
-          description: `Ingested ${totalIngested} new regulations across all competitors.`,
-        });
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["regulation_documents"] });
-    } finally {
-      setFnetFetching(null);
-    }
-  };
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-muted-foreground text-sm">Manage regulation documents for RAG chat.</p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-2"
-          disabled={!!fnetFetching}
-          onClick={handleFnetFetchAll}
-        >
-          {fnetFetching === "all" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {fnetFetching === "all" ? "Fetching All..." : "Auto-Fetch All from FNET"}
-        </Button>
-      </div>
-
-      {/* Per-competitor FNET fetch */}
-      <div className="border border-border rounded-md p-4 mb-6 bg-card space-y-3">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Auto-Fetch from Fundos.NET</h3>
-        <p className="text-xs text-muted-foreground">Fetch regulation documents automatically from CVM/Fundos.NET for a specific competitor.</p>
-        <div className="flex flex-wrap gap-2">
-          {competitors.map((c) => (
-            <Button
-              key={c.id}
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs"
-              disabled={!!fnetFetching}
-              onClick={() => handleFnetFetch(c.id)}
-            >
-              {fnetFetching === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-              {c.name}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <p className="text-muted-foreground text-sm mb-4">Manage regulation documents for RAG chat.</p>
 
       {/* Ingestion form */}
       <div className="border border-border rounded-md p-4 mb-6 bg-card space-y-3">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Manual Ingestion</h3>
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Ingest Regulation</h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Select value={selectedComp} onValueChange={setSelectedComp}>
