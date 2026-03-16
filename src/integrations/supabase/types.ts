@@ -279,6 +279,7 @@ export type Database = {
         Args: {
           competitor_ids?: string[]
           max_results?: number
+          query_embedding_arr?: number[]
           query_text: string
         }
         Returns: {
