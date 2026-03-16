@@ -1,34 +1,38 @@
 
 
-## Plan: Remove Auto-Fetch, Download All Regulations Once, Keep Manual Only
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-### What we'll do
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
-1. **Download all regulation PDFs now** — I'll use the existing `fnet-fetch` edge function to call it repeatedly from the backend for each competitor, one at a time, with higher limits (all docs per CNPJ). This runs server-side so no browser timeouts.
+```typescript
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
+```
 
-2. **Remove auto-fetch UI** — Strip the "Auto-Fetch All from FNET" button and per-competitor fetch buttons from the Admin page. Keep only the manual ingestion form (Paste Text / From URL / Upload PDF).
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-3. **Optionally delete the `fnet-fetch` edge function** — Since it won't be needed anymore. Or keep it as a dormant utility.
+### Changes
 
-### Execution order
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-| Step | What | How |
-|------|------|-----|
-| 1 | Bulk-download regulations | Call `fnet-fetch` via backend curl for each of the 4 competitors (Multiplica, Red, Sifra, Atena) with `max_docs_per_cnpj: 30, max_total_docs: 60`. Repeat calls until no new docs are found. |
-| 2 | Verify ingestion | Query `regulation_documents` and `regulation_chunks` to confirm documents have real text content |
-| 3 | Remove auto-fetch UI | Edit `Admin.tsx` — remove the FNET fetch section, buttons, state variables, and handler functions |
-| 4 | Clean up | Delete `supabase/functions/fnet-fetch/` directory and its config.toml entry |
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
 
-### Technical details
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
 
-- There are 12 active CNPJs across 3 competitors with CNPJs (Atena has none)
-- Each `fnet-fetch` call has a 50s execution budget, processing ~3 docs per run
-- I'll need to call it multiple times per competitor until all "Regulamento" documents are ingested
-- The existing `rag-ingest` function remains for future manual uploads
-- Embeddings will be generated during ingestion (using the LOVABLE_API_KEY already configured)
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
 
-### Files affected
-- `src/pages/Admin.tsx` — remove auto-fetch section
-- `supabase/functions/fnet-fetch/` — delete entirely
-- `supabase/config.toml` — remove fnet-fetch entry (auto-managed, will update)
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 
