@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import RegulationChat from "@/components/RegulationChat";
+
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/format";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -485,12 +485,6 @@ const Compare = () => {
         )}
       </div>
 
-      {/* Regulation Chat */}
-      <RegulationChat
-        competitors={competitorList
-          .filter((c) => c.status === "active")
-          .map((c) => ({ key: c.slug, label: c.name, id: c.id }))}
-      />
     </div>
   );
 };

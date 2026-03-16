@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,11 +18,20 @@ interface Competitor {
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-interface RegulationChatProps {
-  competitors: Competitor[];
-}
-
-export default function RegulationChat({ competitors }: RegulationChatProps) {
+export default function RegulationChat() {
+  const { data: competitors = [] } = useQuery<Competitor[]>({
+    queryKey: ["competitors-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("competitors")
+        .select("id, name, slug")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return (data || []).map((c) => ({ key: c.slug, label: c.name, id: c.id }));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);

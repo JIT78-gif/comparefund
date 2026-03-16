@@ -1,28 +1,38 @@
 
 
-## Plan: Latest-Only Regulations + Chat on All Pages
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-### Change 1 — Limit search to only the latest regulation per competitor
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
-Modify the `search_regulations` SQL function to join only the **most recent** document per competitor (by `created_at`). This way, even though older docs exist in the database, the chat only uses the latest one.
+```typescript
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
+```
 
-**Migration SQL:**
-- Use a CTE or subquery: `SELECT DISTINCT ON (competitor_id) id FROM regulation_documents WHERE status='ready' ORDER BY competitor_id, created_at DESC`
-- Filter `regulation_chunks` to only those belonging to the latest document per competitor
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-### Change 2 — Move RegulationChat to App.tsx (visible on all pages)
+### Changes
 
-Currently `RegulationChat` is only rendered inside `Compare.tsx`. The fix:
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
 
-- **`src/App.tsx`** — Import `RegulationChat` and render it outside the `<Routes>` block but inside `<BrowserRouter>` (so it appears on every page). It will fetch its own competitor list internally.
-- **`src/components/RegulationChat.tsx`** — Make competitors self-loading: remove the `competitors` prop, add a `useQuery` to fetch competitors from the database directly. This makes the component standalone.
-- **`src/pages/Compare.tsx`** — Remove the `RegulationChat` import and usage.
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
 
-### Files to modify
-| File | Change |
-|------|--------|
-| New migration SQL | Update `search_regulations` to only search chunks from latest doc per competitor |
-| `src/components/RegulationChat.tsx` | Remove `competitors` prop, self-fetch competitors via `useQuery` |
-| `src/App.tsx` | Add `RegulationChat` alongside routes |
-| `src/pages/Compare.tsx` | Remove `RegulationChat` usage |
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
+
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
+
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 
