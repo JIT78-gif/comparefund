@@ -10,6 +10,7 @@ import Statements from "./pages/Statements";
 import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import RegulationChat from "./components/RegulationChat";
 
 const queryClient = new QueryClient();
 
