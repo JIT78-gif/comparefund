@@ -31,8 +31,34 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
+      // For internal calls without auth, check for apikey header
+      const apiKey = req.headers.get("apikey");
+      const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const anonKey2 = Deno.env.get("SUPABASE_ANON_KEY")!;
+      if (apiKey === serviceKey2 || apiKey === anonKey2) {
+        // Proceed as service role - skip to body parsing
+        const adminClient = createClient(supabaseUrl2, serviceKey2);
+        const body = await safeJson(req);
+        const competitorId = typeof body?.competitor_id === "string" ? body.competitor_id : null;
+        if (!competitorId) {
+          return jsonResponse({ error: "competitor_id is required" }, 400);
+        }
+        const maxDocsPerCnpj = normalizeLimit(body?.max_docs_per_cnpj, DEFAULT_MAX_DOCS_PER_CNPJ, 1, 30);
+        const maxTotalDocs = normalizeLimit(body?.max_total_docs, DEFAULT_MAX_TOTAL_DOCS, 1, 60);
+        const { data: cnpjs, error: cnpjErr } = await adminClient
+          .from("competitor_cnpjs")
+          .select("cnpj, fund_name")
+          .eq("competitor_id", competitorId)
+          .eq("status", "active");
+        if (cnpjErr || !cnpjs?.length) {
+          return jsonResponse({ ok: true, documents_ingested: 0, warnings: ["No active CNPJs found for this competitor"] });
+        }
+        const result = await processCnpjs(adminClient, competitorId, cnpjs, maxDocsPerCnpj, maxTotalDocs);
+        return jsonResponse(result);
+      }
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
