@@ -31,67 +31,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      // For internal calls without auth, check for apikey header
-      const apiKey = req.headers.get("apikey");
-      const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
-      const serviceKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const anonKey2 = Deno.env.get("SUPABASE_ANON_KEY")!;
-      if (apiKey === serviceKey2 || apiKey === anonKey2) {
-        // Proceed as service role - skip to body parsing
-        const adminClient = createClient(supabaseUrl2, serviceKey2);
-        const body = await safeJson(req);
-        const competitorId = typeof body?.competitor_id === "string" ? body.competitor_id : null;
-        if (!competitorId) {
-          return jsonResponse({ error: "competitor_id is required" }, 400);
-        }
-        const maxDocsPerCnpj = normalizeLimit(body?.max_docs_per_cnpj, DEFAULT_MAX_DOCS_PER_CNPJ, 1, 30);
-        const maxTotalDocs = normalizeLimit(body?.max_total_docs, DEFAULT_MAX_TOTAL_DOCS, 1, 60);
-        const { data: cnpjs, error: cnpjErr } = await adminClient
-          .from("competitor_cnpjs")
-          .select("cnpj, fund_name")
-          .eq("competitor_id", competitorId)
-          .eq("status", "active");
-        if (cnpjErr || !cnpjs?.length) {
-          return jsonResponse({ ok: true, documents_ingested: 0, warnings: ["No active CNPJs found for this competitor"] });
-        }
-        const result = await processCnpjs(adminClient, competitorId, cnpjs, maxDocsPerCnpj, maxTotalDocs);
-        return jsonResponse(result);
-      }
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const token = authHeader.replace("Bearer ", "");
-
-    // Allow service role key or admin password to bypass auth check
-    const adminPwd = Deno.env.get("ADMIN_PASSWORD") || "";
-    const isServiceRole = token === serviceKey || token === anonKey;
-    
-    if (!isServiceRole) {
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-      if (claimsErr || !claims?.claims?.sub) {
-        return jsonResponse({ error: "Unauthorized" }, 401);
-      }
-      const userId = claims.claims.sub as string;
-      const ac = createClient(supabaseUrl, serviceKey);
-      const { data: roleData } = await ac
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (!roleData) {
-        return jsonResponse({ error: "Admin access required" }, 403);
-      }
-    }
-
     const adminClient = createClient(supabaseUrl, serviceKey);
 
     const body = await safeJson(req);
