@@ -205,9 +205,3 @@ ${context ? `## Contexto dos Regulamentos\n\n${context}` : noContextInstruction}
   }
 });
 
-function competitorsFallbackIds(
-  messages: Array<{ content?: string }>,
-  competitorIds?: string[] | null,
-): string[] {
-  return competitorIds?.length ? competitorIds : [];
-}
