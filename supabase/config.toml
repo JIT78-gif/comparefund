@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.rag-chat]
 verify_jwt = false
+
+[functions.fnet-fetch]
+verify_jwt = false
