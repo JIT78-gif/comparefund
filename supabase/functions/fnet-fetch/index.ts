@@ -621,7 +621,45 @@ async function inflateAsync(data: Uint8Array): Promise<Uint8Array | null> {
   return null;
 }
 
-function chunkText(text: string, chunkSize: number, overlap: number): string[] {
+/**
+ * Paragraph-aware chunking: splits on double newlines first,
+ * then groups paragraphs until ~targetWords, with 1-paragraph overlap.
+ * Falls back to word-based chunking if no paragraph breaks.
+ */
+function chunkText(text: string, targetWords: number = 400, _overlap: number = 50): string[] {
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
+  
+  if (paragraphs.length <= 1) {
+    return chunkTextByWords(text, targetWords, _overlap);
+  }
+  
+  const chunks: string[] = [];
+  let currentParagraphs: string[] = [];
+  let currentWordCount = 0;
+
+  for (const para of paragraphs) {
+    const paraWords = para.split(/\s+/).length;
+    
+    if (currentWordCount + paraWords > targetWords && currentParagraphs.length > 0) {
+      chunks.push(currentParagraphs.join("\n\n"));
+      // Keep last paragraph for overlap
+      const last = currentParagraphs[currentParagraphs.length - 1];
+      currentParagraphs = [last];
+      currentWordCount = last.split(/\s+/).length;
+    }
+    
+    currentParagraphs.push(para);
+    currentWordCount += paraWords;
+  }
+
+  if (currentParagraphs.length > 0) {
+    chunks.push(currentParagraphs.join("\n\n"));
+  }
+
+  return chunks.length > 0 ? chunks : [text];
+}
+
+function chunkTextByWords(text: string, chunkSize: number, overlap: number): string[] {
   const words = text.split(/\s+/);
   if (words.length <= chunkSize) return [text];
 
