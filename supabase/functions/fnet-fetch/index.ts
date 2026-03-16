@@ -39,31 +39,33 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
 
-    if (claimsErr || !claims?.claims?.sub) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+    // Allow service role key to bypass auth check
+    const isServiceRole = token === serviceKey;
+    
+    if (!isServiceRole) {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claims?.claims?.sub) {
+        return jsonResponse({ error: "Unauthorized" }, 401);
+      }
+      const userId = claims.claims.sub as string;
+      const ac = createClient(supabaseUrl, serviceKey);
+      const { data: roleData } = await ac
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!roleData) {
+        return jsonResponse({ error: "Admin access required" }, 403);
+      }
     }
 
-    const userId = claims.claims.sub as string;
     const adminClient = createClient(supabaseUrl, serviceKey);
-
-    const { data: roleData } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (!roleData) {
-      return jsonResponse({ error: "Admin access required" }, 403);
-    }
 
     const body = await safeJson(req);
     const competitorId = typeof body?.competitor_id === "string" ? body.competitor_id : null;
