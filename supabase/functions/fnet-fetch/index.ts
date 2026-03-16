@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractText } from "https://esm.sh/unpdf@0.12.1";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const FNET_LIST_URL =
