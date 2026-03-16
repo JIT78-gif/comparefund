@@ -317,15 +317,17 @@ function extractTextFromHtml(htmlContent: string): string {
   return htmlContent
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]*>/g, " ")
+    .replace(/<[^>]*>/g, "\n")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n/g, "\n\n")
+    .trim()
+    .slice(0, 500000); // Cap at 500K chars to avoid tsvector overflow
 }
 
 /**
