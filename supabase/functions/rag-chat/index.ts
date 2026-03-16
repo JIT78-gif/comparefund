@@ -96,23 +96,27 @@ Deno.serve(async (req) => {
 
     // Search regulation chunks using service role
     const adminClient = createClient(supabaseUrl, serviceKey);
+    const searchPromise = adminClient.rpc("search_regulations", {
+      query_text: searchQuery,
+      query_embedding_arr: queryEmbedding,
+      competitor_ids: competitor_ids?.length ? competitor_ids : null,
+      max_results: 15,
+    });
+
+    const readyDocsCountQuery = competitor_ids?.length
+      ? adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready")
+          .in("competitor_id", competitor_ids)
+      : adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready");
+
     const [{ data: searchResults, error: searchErr }, { count: readyDocumentCount, error: countErr }] = await Promise.all([
-      adminClient.rpc("search_regulations", {
-        query_text: searchQuery,
-        query_embedding_arr: queryEmbedding,
-        competitor_ids: competitor_ids?.length ? competitor_ids : null,
-        max_results: 15,
-      }),
-      adminClient
-        .from("regulation_documents")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "ready")
-        .in(
-          "competitor_id",
-          competitor_ids?.length
-            ? competitor_ids
-            : competitorsFallbackIds(messages, competitor_ids)
-        ),
+      searchPromise,
+      readyDocsCountQuery,
     ]);
 
     if (searchErr) {
