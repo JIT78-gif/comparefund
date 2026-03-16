@@ -96,19 +96,38 @@ Deno.serve(async (req) => {
 
     // Search regulation chunks using service role
     const adminClient = createClient(supabaseUrl, serviceKey);
-    const { data: searchResults, error: searchErr } = await adminClient.rpc(
-      "search_regulations",
-      {
-        query_text: searchQuery,
-        query_embedding_arr: queryEmbedding,
-        competitor_ids: competitor_ids?.length ? competitor_ids : null,
-        max_results: 15,
-      }
-    );
+    const searchPromise = adminClient.rpc("search_regulations", {
+      query_text: searchQuery,
+      query_embedding_arr: queryEmbedding,
+      competitor_ids: competitor_ids?.length ? competitor_ids : null,
+      max_results: 15,
+    });
+
+    const readyDocsCountQuery = competitor_ids?.length
+      ? adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready")
+          .in("competitor_id", competitor_ids)
+      : adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready");
+
+    const [{ data: searchResults, error: searchErr }, { count: readyDocumentCount, error: countErr }] = await Promise.all([
+      searchPromise,
+      readyDocsCountQuery,
+    ]);
 
     if (searchErr) {
       console.error("Search error:", searchErr);
     }
+
+    if (countErr) {
+      console.error("Document count error:", countErr);
+    }
+
+    const hasReadyDocuments = (readyDocumentCount ?? 0) > 0;
 
     // Build context from search results
     let context = "";
@@ -121,6 +140,10 @@ Deno.serve(async (req) => {
         .join("\n\n---\n\n");
     }
 
+    const noContextInstruction = hasReadyDocuments
+      ? "⚠️ Existem regulamentos prontos na base, mas nenhum trecho relevante foi encontrado para esta pergunta. Responda de forma útil: cumprimente se for uma saudação, peça uma pergunta mais específica se necessário e jamais diga que a base está vazia."
+      : "⚠️ Ainda não há regulamentos prontos na base. Responda que não há regulamentos ingeridos ainda e sugira ao administrador fazer o upload.";
+
     const systemPrompt = `Você é um especialista em regulamentos de FIDCs (Fundos de Investimento em Direitos Creditórios). 
 Responda com base nos trechos de regulamentos fornecidos abaixo como contexto.
 Quando houver trechos de múltiplos concorrentes, compare as regras e destaque diferenças.
@@ -129,7 +152,7 @@ Responda no idioma da pergunta do usuário (português ou inglês).
 Use markdown para formatação (negrito, listas, títulos).
 **IMPORTANTE**: Cite as fontes usando a notação [N] ao longo da resposta, referenciando os trechos do contexto. Por exemplo: "Conforme [2], o prazo de resgate é D+30."
 
-${context ? `## Contexto dos Regulamentos\n\n${context}` : "⚠️ Nenhum regulamento encontrado na base. Responda que não há regulamentos ingeridos ainda e sugira ao administrador fazer o upload."}`;
+${context ? `## Contexto dos Regulamentos\n\n${context}` : noContextInstruction}`;
 
     // Call Lovable AI gateway with streaming
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -181,3 +204,4 @@ ${context ? `## Contexto dos Regulamentos\n\n${context}` : "⚠️ Nenhum regula
     );
   }
 });
+
