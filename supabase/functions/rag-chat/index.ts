@@ -12,7 +12,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify authenticated user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -54,13 +53,45 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get the last user message for search
-    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
-    if (!lastUserMsg) {
-      return new Response(JSON.stringify({ error: "No user message found" }), {
+    // Build conversation-aware search query from last 3 messages
+    const recentMessages = messages.slice(-3);
+    const searchQuery = recentMessages
+      .map((m: { content: string }) => m.content)
+      .join(" ")
+      .slice(0, 500);
+
+    if (!searchQuery.trim()) {
+      return new Response(JSON.stringify({ error: "No search content found" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Generate query embedding for semantic search
+    let queryEmbedding: number[] | null = null;
+    try {
+      const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+      if (lastUserMsg) {
+        const embResponse = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${lovableApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "text-embedding-3-small",
+            input: lastUserMsg.content,
+            dimensions: 768,
+          }),
+        });
+
+        if (embResponse.ok) {
+          const embData = await embResponse.json();
+          queryEmbedding = embData.data?.[0]?.embedding || null;
+        }
+      }
+    } catch (e) {
+      console.error("Query embedding failed (continuing with text search):", e);
     }
 
     // Search regulation chunks using service role
@@ -68,9 +99,10 @@ Deno.serve(async (req) => {
     const { data: searchResults, error: searchErr } = await adminClient.rpc(
       "search_regulations",
       {
-        query_text: lastUserMsg.content,
+        query_text: searchQuery,
+        query_embedding_arr: queryEmbedding,
         competitor_ids: competitor_ids?.length ? competitor_ids : null,
-        max_results: 10,
+        max_results: 15,
       }
     );
 
@@ -83,7 +115,7 @@ Deno.serve(async (req) => {
     if (searchResults && searchResults.length > 0) {
       context = searchResults
         .map(
-          (r: any, i: number) =>
+          (r: { competitor_name: string; document_title: string; content: string }, i: number) =>
             `[${i + 1}] Fonte: ${r.competitor_name} — "${r.document_title}"\n${r.content}`
         )
         .join("\n\n---\n\n");
@@ -94,7 +126,8 @@ Responda com base nos trechos de regulamentos fornecidos abaixo como contexto.
 Quando houver trechos de múltiplos concorrentes, compare as regras e destaque diferenças.
 Se não encontrar informação relevante no contexto, diga isso claramente.
 Responda no idioma da pergunta do usuário (português ou inglês).
-Use markdown para formatação.
+Use markdown para formatação (negrito, listas, títulos).
+**IMPORTANTE**: Cite as fontes usando a notação [N] ao longo da resposta, referenciando os trechos do contexto. Por exemplo: "Conforme [2], o prazo de resgate é D+30."
 
 ${context ? `## Contexto dos Regulamentos\n\n${context}` : "⚠️ Nenhum regulamento encontrado na base. Responda que não há regulamentos ingeridos ainda e sugira ao administrador fazer o upload."}`;
 

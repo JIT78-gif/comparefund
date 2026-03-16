@@ -127,6 +127,7 @@ export type Database = {
           content: string
           created_at: string
           document_id: string
+          embedding: string | null
           id: string
           search_vector: unknown
         }
@@ -135,6 +136,7 @@ export type Database = {
           content: string
           created_at?: string
           document_id: string
+          embedding?: string | null
           id?: string
           search_vector?: unknown
         }
@@ -143,6 +145,7 @@ export type Database = {
           content?: string
           created_at?: string
           document_id?: string
+          embedding?: string | null
           id?: string
           search_vector?: unknown
         }
@@ -276,6 +279,7 @@ export type Database = {
         Args: {
           competitor_ids?: string[]
           max_results?: number
+          query_embedding_arr?: number[]
           query_text: string
         }
         Returns: {
