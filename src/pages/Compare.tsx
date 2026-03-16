@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
-import RegulationChat from "@/components/RegulationChat";
+
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/format";
 import { useLanguage } from "@/contexts/LanguageContext";
