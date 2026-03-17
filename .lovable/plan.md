@@ -1,38 +1,60 @@
 
 
-## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
+## Plan: Replace Custom RAG with Google Gemini File Search
 
-### Problem
-The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
+The current RAG system hallucates because the custom chunking/search is weak (latest docs only have 1 chunk each). Google's File Search API handles chunking, embedding, and retrieval natively with grounded generation — eliminating hallucinations.
 
-```typescript
-const isVirtual = account.id.startsWith("_");
-const value = isVirtual ? 0 : getValue(col.key, account.id);
-```
+### Prerequisites
+- You will need to provide a **Gemini API key** (from [Google AI Studio](https://aistudio.google.com/apikey))
 
-All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
+### Change 1 — New DB table to track File Search Stores
 
-### Changes
+A small table `google_file_stores` to remember which Google File Search Store each competitor's latest doc was uploaded to:
 
-**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
-- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
+| Column | Type |
+|--------|------|
+| id | uuid PK |
+| competitor_id | uuid (unique) |
+| store_name | text (Google's fileSearchStores/xxx ID) |
+| document_id | uuid (which regulation_document was uploaded) |
+| created_at / updated_at | timestamptz |
 
-**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
-- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
-- For rate columns (Tab IX), compute average instead of sum
-- Pass the tree structure to look up children
+### Change 2 — New edge function `sync-file-store`
 
-**3. `src/components/Navbar.tsx`** — Add missing nav link
-- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
-- Rename "HOME" to "DASHBOARD"
+Called after ingestion or manually. For each active competitor:
+1. Gets the latest "ready" regulation document
+2. Concatenates all its chunks into a single text file
+3. Creates a Google File Search Store (or reuses existing)
+4. Uploads the text via the REST API (`POST generativelanguage.googleapis.com/v1beta/fileSearchStores/{id}:uploadToFileSearchStore`)
+5. Saves the store name in `google_file_stores`
 
-**4. `src/index.css`** — Switch body font
-- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
-- Keep `font-mono` utility class for numeric table cells only
+### Change 3 — Modify `rag-chat` edge function
 
-### Files
-- `src/lib/account-tree.ts` — add child lookup helper
-- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
-- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
-- `src/index.css` — change body font to Inter
+Replace the custom `search_regulations` call with a direct Gemini API call using the File Search tool:
+- Fetch all file search store names from `google_file_stores` (filtered by selected competitors)
+- Call `POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` with:
+  - `tools: [{ fileSearch: { fileSearchStoreNames: [...] } }]`
+  - System prompt + user messages
+- Stream the response back (Gemini supports SSE streaming)
+- This means answers are **grounded only on uploaded documents** — no hallucination
+
+### Change 4 — Modify `rag-ingest` to trigger sync
+
+After successfully ingesting a document, call the `sync-file-store` function to upload the new doc to Google File Search.
+
+### Change 5 — Keep chat UI unchanged
+
+`RegulationChat.tsx` stays the same — it already calls `rag-chat` and handles streaming.
+
+### Files to modify/create
+| File | Change |
+|------|--------|
+| New migration | Create `google_file_stores` table |
+| `supabase/functions/sync-file-store/index.ts` | New — uploads latest docs to Google File Search |
+| `supabase/functions/rag-chat/index.ts` | Use Gemini File Search instead of custom search |
+| `supabase/functions/rag-ingest/index.ts` | Trigger sync after ingestion |
+| `supabase/config.toml` | Add `sync-file-store` function config |
+
+### Technical note
+Google File Search API is called directly (not via Lovable AI gateway) because the gateway doesn't support the `fileSearch` tool parameter. This requires a `GEMINI_API_KEY` secret.
 
