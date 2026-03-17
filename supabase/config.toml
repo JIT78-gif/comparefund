@@ -17,6 +17,3 @@ verify_jwt = false
 
 [functions.fnet-fetch]
 verify_jwt = false
-
-[functions.sync-file-store]
-verify_jwt = false

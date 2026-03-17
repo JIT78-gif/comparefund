@@ -6,8 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -25,16 +23,15 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!geminiKey) {
-      return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), {
+    if (!lovableApiKey) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Verify auth
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -56,110 +53,147 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch file search store names
+    // Build conversation-aware search query from last 3 messages
+    const recentMessages = messages.slice(-3);
+    const searchQuery = recentMessages
+      .map((m: { content: string }) => m.content)
+      .join(" ")
+      .slice(0, 500);
+
+    if (!searchQuery.trim()) {
+      return new Response(JSON.stringify({ error: "No search content found" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate query embedding for semantic search
+    let queryEmbedding: number[] | null = null;
+    try {
+      const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+      if (lastUserMsg) {
+        const embResponse = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${lovableApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "text-embedding-3-small",
+            input: lastUserMsg.content,
+            dimensions: 768,
+          }),
+        });
+
+        if (embResponse.ok) {
+          const embData = await embResponse.json();
+          queryEmbedding = embData.data?.[0]?.embedding || null;
+        }
+      }
+    } catch (e) {
+      console.error("Query embedding failed (continuing with text search):", e);
+    }
+
+    // Search regulation chunks using service role
     const adminClient = createClient(supabaseUrl, serviceKey);
-    let storeQuery = adminClient.from("google_file_stores").select("store_name, competitor_id");
-    if (competitor_ids?.length) {
-      storeQuery = storeQuery.in("competitor_id", competitor_ids);
+    const searchPromise = adminClient.rpc("search_regulations", {
+      query_text: searchQuery,
+      query_embedding_arr: queryEmbedding,
+      competitor_ids: competitor_ids?.length ? competitor_ids : null,
+      max_results: 15,
+    });
+
+    const readyDocsCountQuery = competitor_ids?.length
+      ? adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready")
+          .in("competitor_id", competitor_ids)
+      : adminClient
+          .from("regulation_documents")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready");
+
+    const [{ data: searchResults, error: searchErr }, { count: readyDocumentCount, error: countErr }] = await Promise.all([
+      searchPromise,
+      readyDocsCountQuery,
+    ]);
+
+    if (searchErr) {
+      console.error("Search error:", searchErr);
     }
-    const { data: stores } = await storeQuery;
-    const storeNames = (stores || []).map((s) => s.store_name).filter(Boolean);
 
-    if (storeNames.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Nenhum regulamento sincronizado. Peça ao administrador para sincronizar os documentos." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (countErr) {
+      console.error("Document count error:", countErr);
     }
 
-    // Build Gemini contents from messages
-    const geminiContents = messages.map((m: { role: string; content: string }) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    const hasReadyDocuments = (readyDocumentCount ?? 0) > 0;
 
-    const systemInstruction = {
-      parts: [
-        {
-          text: `Você é um especialista em regulamentos de FIDCs (Fundos de Investimento em Direitos Creditórios).
-Responda SOMENTE com base nos documentos fornecidos via File Search. NÃO use conhecimento externo.
-Se a informação não estiver nos documentos, diga claramente que não encontrou nos regulamentos disponíveis.
+    // Build context from search results
+    let context = "";
+    if (searchResults && searchResults.length > 0) {
+      context = searchResults
+        .map(
+          (r: { competitor_name: string; document_title: string; content: string }, i: number) =>
+            `[${i + 1}] Fonte: ${r.competitor_name} — "${r.document_title}"\n${r.content}`
+        )
+        .join("\n\n---\n\n");
+    }
+
+    const noContextInstruction = hasReadyDocuments
+      ? "⚠️ Existem regulamentos prontos na base, mas nenhum trecho relevante foi encontrado para esta pergunta. Responda de forma útil: cumprimente se for uma saudação, peça uma pergunta mais específica se necessário e jamais diga que a base está vazia."
+      : "⚠️ Ainda não há regulamentos prontos na base. Responda que não há regulamentos ingeridos ainda e sugira ao administrador fazer o upload.";
+
+    const systemPrompt = `Você é um especialista em regulamentos de FIDCs (Fundos de Investimento em Direitos Creditórios). 
+Responda com base nos trechos de regulamentos fornecidos abaixo como contexto.
 Quando houver trechos de múltiplos concorrentes, compare as regras e destaque diferenças.
+Se não encontrar informação relevante no contexto, diga isso claramente.
 Responda no idioma da pergunta do usuário (português ou inglês).
 Use markdown para formatação (negrito, listas, títulos).
-Cite as fontes quando possível, referenciando os nomes dos documentos.`,
-        },
-      ],
-    };
+**IMPORTANTE**: Cite as fontes usando a notação [N] ao longo da resposta, referenciando os trechos do contexto. Por exemplo: "Conforme [2], o prazo de resgate é D+30."
 
-    // Call Gemini with File Search tool and streaming
-    const geminiRes = await fetch(
-      `${GEMINI_BASE}/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: geminiContents,
-          systemInstruction,
-          tools: [
-            {
-              file_search: {
-                file_search_store_names: storeNames,
-              },
-            },
-          ],
-        }),
+${context ? `## Contexto dos Regulamentos\n\n${context}` : noContextInstruction}`;
+
+    // Call Lovable AI gateway with streaming
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ],
+        stream: true,
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const status = aiResponse.status;
+      if (status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error("Gemini API error:", geminiRes.status, errText);
+      if (status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required. Please add credits." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const errText = await aiResponse.text();
+      console.error("AI gateway error:", status, errText);
       return new Response(JSON.stringify({ error: "AI service error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Transform Gemini SSE to OpenAI-compatible SSE format (frontend expects this)
-    const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        const text = new TextDecoder().decode(chunk);
-        const lines = text.split("\n");
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === "[DONE]") {
-            controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-            continue;
-          }
-
-          try {
-            const geminiData = JSON.parse(jsonStr);
-            const parts = geminiData.candidates?.[0]?.content?.parts;
-            if (parts) {
-              for (const part of parts) {
-                if (part.text) {
-                  const openaiChunk = {
-                    choices: [{ delta: { content: part.text } }],
-                  };
-                  controller.enqueue(
-                    new TextEncoder().encode(`data: ${JSON.stringify(openaiChunk)}\n\n`)
-                  );
-                }
-              }
-            }
-          } catch {
-            // Skip unparseable lines
-          }
-        }
-      },
-    });
-
-    const stream = geminiRes.body!.pipeThrough(transformStream);
-
-    return new Response(stream, {
+    return new Response(aiResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
@@ -170,3 +204,4 @@ Cite as fontes quando possível, referenciando os nomes dos documentos.`,
     );
   }
 });
+

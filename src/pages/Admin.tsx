@@ -893,7 +893,6 @@ const Admin = () => {
 
 function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
   const [ingesting, setIngesting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [selectedComp, setSelectedComp] = useState("");
   const [title, setTitle] = useState("");
   const [textContent, setTextContent] = useState("");
@@ -1006,43 +1005,6 @@ function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-muted-foreground text-sm">Manage regulation documents for RAG chat.</p>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={syncing}
-          className="gap-2"
-          onClick={async () => {
-            setSyncing(true);
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              const token = session?.access_token;
-              const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-              const res = await fetch(
-                `https://${projectId}.supabase.co/functions/v1/sync-file-store`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  },
-                  body: JSON.stringify({}),
-                }
-              );
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-              const synced = data.results?.filter((r: any) => r.status === "synced").length || 0;
-              toast({ title: "Sync complete", description: `${synced} competitor(s) synced to Google File Search.` });
-            } catch (err) {
-              toast({ title: "Sync failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
-            } finally {
-              setSyncing(false);
-            }
-          }}
-        >
-          {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {syncing ? "Syncing..." : "Sync File Search"}
-        </Button>
       </div>
 
       {/* Ingestion form */}
