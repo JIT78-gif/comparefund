@@ -291,7 +291,8 @@ Deno.serve(async (req) => {
       console.log(`Fetching medidas: ${medidasUrl}`);
       const medidasRes = await fetch(medidasUrl);
       if (medidasRes.ok) {
-        const medidasText = await medidasRes.text();
+        const medidasBuf = await medidasRes.arrayBuffer();
+        const medidasText = new TextDecoder("latin1").decode(medidasBuf);
         const medidasLines = medidasText.split("\n").filter(l => l.trim());
         if (medidasLines.length > 1) {
           const mHeader = medidasLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
