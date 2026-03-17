@@ -103,48 +103,6 @@ export type Database = {
         }
         Relationships: []
       }
-      google_file_stores: {
-        Row: {
-          competitor_id: string
-          created_at: string
-          document_id: string | null
-          id: string
-          store_name: string
-          updated_at: string
-        }
-        Insert: {
-          competitor_id: string
-          created_at?: string
-          document_id?: string | null
-          id?: string
-          store_name: string
-          updated_at?: string
-        }
-        Update: {
-          competitor_id?: string
-          created_at?: string
-          document_id?: string | null
-          id?: string
-          store_name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "google_file_stores_competitor_id_fkey"
-            columns: ["competitor_id"]
-            isOneToOne: true
-            referencedRelation: "competitors"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "google_file_stores_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "regulation_documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           created_at: string
