@@ -184,6 +184,22 @@ Deno.serve(async (req) => {
       .update({ status: "ready", chunk_count: chunks.length })
       .eq("id", doc.id);
 
+    // Trigger Google File Search sync for this competitor
+    try {
+      const syncUrl = `${supabaseUrl}/functions/v1/sync-file-store`;
+      await fetch(syncUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ competitor_id: competitorId }),
+      });
+    } catch (syncErr) {
+      console.error("File search sync trigger failed (non-blocking):", syncErr);
+    }
+
     return new Response(
       JSON.stringify({ success: true, document_id: doc.id, chunk_count: chunks.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
