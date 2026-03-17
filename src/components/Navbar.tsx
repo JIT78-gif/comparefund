@@ -13,9 +13,7 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
-    { path: "/", label: "DASHBOARD" },
     { path: "/compare", label: t("nav.compare").toUpperCase() },
-    { path: "/statements", label: t("nav.statements").toUpperCase() },
     ...(isAdmin ? [{ path: "/admin", label: "ADMIN" }] : []),
   ];
 
