@@ -314,7 +314,8 @@ Deno.serve(async (req) => {
         const histUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/HIST/medidas_fie_${yearStr}.csv`;
         const histRes = await fetch(histUrl);
         if (histRes.ok) {
-          const histText = await histRes.text();
+          const histBuf = await histRes.arrayBuffer();
+          const histText = new TextDecoder("latin1").decode(histBuf);
           const histLines = histText.split("\n").filter(l => l.trim());
           if (histLines.length > 1) {
             const mHeader = histLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
