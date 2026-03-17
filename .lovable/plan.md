@@ -1,38 +1,38 @@
 
 
-## Plan: Remove "Demonstrações" Nav Tab + Fix Encoding in Compare
+## Fix: Virtual Parent Nodes Showing "—" + Font Update + Navbar Fix
 
-### Issue 1 — Remove "Demonstrações" from navbar
-The Statements link (`/statements`) currently shows in the nav. Remove it from the `links` array in `Navbar.tsx`. The `/statements` route redirects to `/` anyway.
-
-**File: `src/components/Navbar.tsx` (line 18)**
-- Remove `{ path: "/statements", label: t("nav.statements").toUpperCase() }` from the links array.
-
-### Issue 2 — Fix `?` characters in fund names (e.g. "CREDIT�RIOS")
-CVM CSV files are encoded in Latin-1 (ISO-8859-1), but the code reads them as UTF-8 via `file.async("text")`. Characters like `Ó`, `Ã`, `É` get corrupted.
-
-**File: `supabase/functions/cvm-compare/index.ts` (line 77)**
-- Change `parseCsvFile` to read bytes first with `file.async("uint8array")`, then decode with `new TextDecoder("latin1")`.
+### Problem
+The data in the database is correct (verified Multiplica Dec 2025: `TAB_I_VL_ATIVO` = R$ 1.68B, `TAB_IV_A_VL_PL` = R$ 1.67B, etc.). The bug is in `StatementTreeGrid.tsx` line 214:
 
 ```typescript
-async function parseCsvFile(file: JSZip.JSZipObject): Promise<ParsedTable> {
-  const bytes = await file.async("uint8array");
-  const text = new TextDecoder("latin1").decode(bytes);
-  // ... rest unchanged
-}
+const isVirtual = account.id.startsWith("_");
+const value = isVirtual ? 0 : getValue(col.key, account.id);
 ```
 
-Same fix needed for any other `.text()` calls on fetched CVM data (lines ~293, ~315 where `medidasRes.text()` and `histRes.text()` are called). Those fetch responses also need Latin-1 decoding:
-```typescript
-const buf = await medidasRes.arrayBuffer();
-const medidasText = new TextDecoder("latin1").decode(buf);
-```
+All parent nodes with IDs starting with `_` (Tab IV Patrimônio Líquido, Tab V, VI, VII, IX, X and their sub-groups like `_TAB_VII_A`, `_TAB_X_SCR_DEV`, etc.) are **hardcoded to zero** — so entire sections show "—" even though their children have real data.
 
-**Redeploy** the `cvm-compare` edge function after changes.
+### Changes
 
-### Files to modify
-| File | Change |
-|------|--------|
-| `src/components/Navbar.tsx` | Remove statements link from nav |
-| `supabase/functions/cvm-compare/index.ts` | Decode CSVs as Latin-1 instead of UTF-8 |
+**1. `src/lib/account-tree.ts`** — Export a helper to get direct children IDs of a node
+- Add `getDirectChildIds(tree, parentId)` function that returns the immediate children IDs for a given virtual parent
+
+**2. `src/components/StatementTreeGrid.tsx`** — Aggregate children for virtual parents
+- For virtual nodes (`id.startsWith("_")`), compute the sum of immediate children's values using `getValue`
+- For rate columns (Tab IX), compute average instead of sum
+- Pass the tree structure to look up children
+
+**3. `src/components/Navbar.tsx`** — Add missing nav link
+- Add `{ path: "/statements", label: "DEMONSTRAÇÕES" }` to the links array
+- Rename "HOME" to "DASHBOARD"
+
+**4. `src/index.css`** — Switch body font
+- Change `font-family: 'DM Mono', monospace` to `font-family: 'Inter', sans-serif` on `body`
+- Keep `font-mono` utility class for numeric table cells only
+
+### Files
+- `src/lib/account-tree.ts` — add child lookup helper
+- `src/components/StatementTreeGrid.tsx` — aggregate virtual parent values
+- `src/components/Navbar.tsx` — add DEMONSTRAÇÕES link
+- `src/index.css` — change body font to Inter
 

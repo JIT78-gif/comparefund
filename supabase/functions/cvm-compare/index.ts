@@ -74,7 +74,8 @@ interface ParsedTable {
 }
 
 async function parseCsvFile(file: JSZip.JSZipObject): Promise<ParsedTable> {
-  const text = await file.async("text");
+  const bytes = await file.async("uint8array");
+  const text = new TextDecoder("latin1").decode(bytes);
   const lines = text.split("\n").filter((l) => l.trim());
   if (lines.length < 2) return { header: [], rows: [] };
   const header = lines[0].split(";").map((h) => h.trim().replace(/"/g, ""));
@@ -290,7 +291,8 @@ Deno.serve(async (req) => {
       console.log(`Fetching medidas: ${medidasUrl}`);
       const medidasRes = await fetch(medidasUrl);
       if (medidasRes.ok) {
-        const medidasText = await medidasRes.text();
+        const medidasBuf = await medidasRes.arrayBuffer();
+        const medidasText = new TextDecoder("latin1").decode(medidasBuf);
         const medidasLines = medidasText.split("\n").filter(l => l.trim());
         if (medidasLines.length > 1) {
           const mHeader = medidasLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
@@ -312,7 +314,8 @@ Deno.serve(async (req) => {
         const histUrl = `https://dados.cvm.gov.br/dados/FIE/MEDIDAS/DADOS/HIST/medidas_fie_${yearStr}.csv`;
         const histRes = await fetch(histUrl);
         if (histRes.ok) {
-          const histText = await histRes.text();
+          const histBuf = await histRes.arrayBuffer();
+          const histText = new TextDecoder("latin1").decode(histBuf);
           const histLines = histText.split("\n").filter(l => l.trim());
           if (histLines.length > 1) {
             const mHeader = histLines[0].split(";").map(h => h.trim().replace(/"/g, ""));
