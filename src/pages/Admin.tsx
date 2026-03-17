@@ -893,6 +893,7 @@ const Admin = () => {
 
 function RegulationsAdmin({ competitors }: { competitors: Competitor[] }) {
   const [ingesting, setIngesting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [selectedComp, setSelectedComp] = useState("");
   const [title, setTitle] = useState("");
   const [textContent, setTextContent] = useState("");
