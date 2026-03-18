@@ -83,9 +83,9 @@ export default function RegulationChat() {
     };
 
     try {
-      const competitorIds = selectedCompetitors.size > 0
+      const competitorIds = selectedCompetitor
         ? competitors
-            .filter((c) => selectedCompetitors.has(c.key))
+            .filter((c) => c.key === selectedCompetitor)
             .map((c) => c.id)
             .filter(Boolean)
         : [];
