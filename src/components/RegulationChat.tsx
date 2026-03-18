@@ -122,7 +122,7 @@ export default function RegulationChat() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, selectedCompetitors, competitors]);
+  }, [input, isLoading, messages, selectedCompetitor, competitors]);
 
   return (
     <>
