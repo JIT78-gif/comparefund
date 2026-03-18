@@ -153,12 +153,12 @@ export default function RegulationChat() {
               {competitors.map((c) => (
                 <Badge
                   key={c.key}
-                  variant={selectedCompetitors.has(c.key) ? "default" : "outline"}
+                  variant={selectedCompetitor === c.key ? "default" : "outline"}
                   className="cursor-pointer text-[10px] tracking-wider"
                   onClick={() => toggleCompetitor(c.key)}
                 >
                   {c.label}
-                  {selectedCompetitors.has(c.key) && (
+                  {selectedCompetitor === c.key && (
                     <X className="h-3 w-3 ml-1" />
                   )}
                 </Badge>
