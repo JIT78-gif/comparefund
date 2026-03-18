@@ -53,12 +53,8 @@ export default function RegulationChat() {
     }
   }, [open]);
 
-  const toggleCompetitor = (id: string) => {
-    setSelectedCompetitors((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggleCompetitor = (key: string) => {
+    setSelectedCompetitor((prev) => (prev === key ? null : key));
   };
 
   const send = useCallback(async () => {
