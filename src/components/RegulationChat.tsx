@@ -37,7 +37,7 @@ export default function RegulationChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
