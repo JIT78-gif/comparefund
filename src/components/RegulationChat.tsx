@@ -37,7 +37,7 @@ export default function RegulationChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,12 +53,8 @@ export default function RegulationChat() {
     }
   }, [open]);
 
-  const toggleCompetitor = (id: string) => {
-    setSelectedCompetitors((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggleCompetitor = (key: string) => {
+    setSelectedCompetitor((prev) => (prev === key ? null : key));
   };
 
   const send = useCallback(async () => {
@@ -87,9 +83,9 @@ export default function RegulationChat() {
     };
 
     try {
-      const competitorIds = selectedCompetitors.size > 0
+      const competitorIds = selectedCompetitor
         ? competitors
-            .filter((c) => selectedCompetitors.has(c.key))
+            .filter((c) => c.key === selectedCompetitor)
             .map((c) => c.id)
             .filter(Boolean)
         : [];
@@ -126,7 +122,7 @@ export default function RegulationChat() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, selectedCompetitors, competitors]);
+  }, [input, isLoading, messages, selectedCompetitor, competitors]);
 
   return (
     <>
@@ -157,12 +153,12 @@ export default function RegulationChat() {
               {competitors.map((c) => (
                 <Badge
                   key={c.key}
-                  variant={selectedCompetitors.has(c.key) ? "default" : "outline"}
+                  variant={selectedCompetitor === c.key ? "default" : "outline"}
                   className="cursor-pointer text-[10px] tracking-wider"
                   onClick={() => toggleCompetitor(c.key)}
                 >
                   {c.label}
-                  {selectedCompetitors.has(c.key) && (
+                  {selectedCompetitor === c.key && (
                     <X className="h-3 w-3 ml-1" />
                   )}
                 </Badge>
