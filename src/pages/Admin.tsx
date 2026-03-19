@@ -56,7 +56,7 @@ const Admin = () => {
   const queryClient = useQueryClient();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users" | "regulations">("competitors");
+  const [activeTab, setActiveTab] = useState<"competitors" | "emails" | "users">("competitors");
 
   // Competitor dialogs
   const [addCompOpen, setAddCompOpen] = useState(false);
