@@ -85,7 +85,8 @@ interface ParsedTable {
 }
 
 async function parseCsvFile(file: JSZip.JSZipObject): Promise<ParsedTable> {
-  const text = await file.async("text");
+  const bytes = await file.async("uint8array");
+  const text = new TextDecoder("latin1").decode(bytes);
   const lines = text.split("\n").filter((l) => l.trim());
   if (lines.length < 2) return { header: [], rows: [] };
   const header = lines[0].split(";").map((h) => h.trim().replace(/"/g, ""));
