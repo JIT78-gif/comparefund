@@ -792,11 +792,6 @@ const Admin = () => {
           </div>
         )}
 
-        {/* Regulations Tab */}
-        {activeTab === "regulations" && (
-          <RegulationsAdmin competitors={competitors} />
-        )}
-
         {/* Users & Roles Tab */}
         {activeTab === "users" && (
           <div>
