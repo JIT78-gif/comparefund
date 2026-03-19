@@ -160,6 +160,16 @@ async function writeCacheError(refMonth: string, fundType: string, errorMsg: str
 
 // ── CVM fetch ──────────────────────────────────────────────────
 
+function extractYYYYMM(dateStr: string): string {
+  // Handles "YYYY-MM-DD" or "DD/MM/YYYY" formats
+  if (dateStr.includes("-")) return dateStr.substring(0, 7).replace("-", "");
+  if (dateStr.includes("/")) {
+    const parts = dateStr.split("/");
+    if (parts.length === 3) return parts[2] + parts[1];
+  }
+  return "";
+}
+
 async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline: number): Promise<MonthResult> {
   const remaining = budgetDeadline - Date.now();
   const timeout = Math.min(FETCH_TIMEOUT_MS, Math.max(remaining - 3000, 5000));
