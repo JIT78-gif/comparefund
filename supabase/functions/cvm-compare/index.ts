@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
       const { header, rows } = await parseCsvFile(file);
       if (!header.length) continue;
 
-      const cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
+      let cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
+      if (cnpjIdx === -1) cnpjIdx = header.indexOf("CNPJ_FUNDO");
       if (cnpjIdx === -1) continue;
 
       // Determine which table

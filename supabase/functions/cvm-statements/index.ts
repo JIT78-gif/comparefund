@@ -204,13 +204,17 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
   const fundTypes: Record<string, string> = {};
   let totalRows = 0, matchedRows = 0, skippedCnpj = 0, anomalies = 0;
 
+  const isYearlyZip = yearNum < 2019;
+
   for (const [filename, file] of Object.entries(zip.files)) {
     if (file.dir || !filename.endsWith(".csv")) continue;
 
     const { header, rows } = await parseCsvFile(file);
     if (!header.length) continue;
 
-    const cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
+    // Support both new (CNPJ_FUNDO_CLASSE) and legacy (CNPJ_FUNDO) column names
+    let cnpjIdx = header.indexOf("CNPJ_FUNDO_CLASSE");
+    if (cnpjIdx === -1) cnpjIdx = header.indexOf("CNPJ_FUNDO");
     if (cnpjIdx === -1) continue;
 
     // Skip per-subclass Tab X files (data per senior/subordinado/mezanino)
@@ -228,12 +232,26 @@ async function fetchMonthData(refMonth: string, fundType: string, budgetDeadline
     }
     if (tabColumns.length === 0) continue;
 
-    const nameIdx = header.indexOf("DENOM_SOCIAL");
+    // For yearly ZIPs, find the date column to filter by requested month
+    let dtIdx = -1;
+    if (isYearlyZip) {
+      dtIdx = header.indexOf("DT_COMPTC");
+      if (dtIdx === -1) dtIdx = header.indexOf("DT_COMPT");
+    }
+
+    const nameIdx = header.indexOf("DENOM_SOCIAL") !== -1 ? header.indexOf("DENOM_SOCIAL") : header.indexOf("NM_FUNDO_CLASSE");
     const tpFundoIdx = header.indexOf("TP_FUNDO") !== -1 ? header.indexOf("TP_FUNDO") : header.indexOf("TP_FUNDO_CLASSE");
     const condominioIdx = header.indexOf("CONDOM");
 
     for (const row of rows) {
       totalRows++;
+
+      // Filter by month for yearly ZIPs
+      if (isYearlyZip && dtIdx !== -1) {
+        const rowMonth = extractYYYYMM(row[dtIdx] || "");
+        if (rowMonth && rowMonth !== refMonth) continue;
+      }
+
       const cnpj = cleanCnpj(row[cnpjIdx] || "");
       if (!isValidCnpj(cnpj)) { skippedCnpj++; continue; }
       const company = getCompany(cnpj);
