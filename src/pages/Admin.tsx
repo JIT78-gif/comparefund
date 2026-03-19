@@ -344,12 +344,6 @@ const Admin = () => {
           >
             <UserCog className="h-4 w-4 inline mr-2" />Users & Roles
           </button>
-          <button
-            onClick={() => setActiveTab("regulations")}
-            className={`pb-3 text-sm font-mono tracking-[2px] uppercase transition-colors border-b-2 ${activeTab === "regulations" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`}
-          >
-            <FileText className="h-4 w-4 inline mr-2" />Regulamentos
-          </button>
         </div>
 
         {/* Authorized Emails Tab */}
