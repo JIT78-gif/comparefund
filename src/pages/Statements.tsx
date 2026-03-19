@@ -14,7 +14,7 @@ import { AlertTriangle, RefreshCw, Info, BarChart3 } from "lucide-react";
 import { invokeStatements, classifyError } from "@/lib/cvm-invoke";
 import { fetchCompetitors, type Competitor } from "@/lib/competitors";
 
-const YEARS = Array.from({ length: 8 }, (_, i) => String(2019 + i));
+const YEARS = Array.from({ length: 15 }, (_, i) => String(2013 + i));
 
 const MONTH_KEYS = [
   "month.jan", "month.feb", "month.mar", "month.apr", "month.may", "month.jun",
