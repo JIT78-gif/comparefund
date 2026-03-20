@@ -74,6 +74,7 @@ const translations: Translations = {
   "statements.addPeriod": { pt: "+ Adicionar 3º período", en: "+ Add 3rd period" },
   "statements.removePeriod": { pt: "– Remover 3º período", en: "– Remove 3rd period" },
   "statements.errorLoading": { pt: "Erro ao carregar dados:", en: "Error loading data:" },
+  "statements.noData": { pt: "Não há informações para a data selecionada.", en: "No data available for the selected date." },
 
   // StatementTreeGrid
   "grid.expandAll": { pt: "Expandir Tudo", en: "Expand All" },

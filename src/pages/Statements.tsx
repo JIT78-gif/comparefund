@@ -362,6 +362,22 @@ const Statements = () => {
           </Alert>
         )}
 
+        {!isLoading && !error && displayData && (() => {
+          const hasAnyData = columns.some((col) => {
+            if (mode === "companies") {
+              const companyData = displayData[debouncedKey.months[0]]?.[col.key];
+              return companyData && Object.keys(companyData).length > 0;
+            }
+            const companyData = displayData[col.key]?.[singleCompany];
+            return companyData && Object.keys(companyData).length > 0;
+          });
+          return !hasAnyData;
+        })() && (
+          <div className="border border-border bg-card p-8 rounded-sm text-center text-muted-foreground text-sm mb-8">
+            {t("statements.noData")}
+          </div>
+        )}
+
         <StatementTreeGrid
           columns={columns}
           getValue={getValue}
