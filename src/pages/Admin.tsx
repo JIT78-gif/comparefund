@@ -212,8 +212,7 @@ const Admin = () => {
           body.searchTerms = [cvmSearchQuery];
           body.searchField = cvmSearchField;
         }
-        const { data, error } = await supabase.functions.invoke("cvm-discover", { body });
-        if (error) throw error;
+        const data = await apiFetch("/discover", { method: "POST", body: JSON.stringify(body) });
         setCvmResults(data?.matches || []);
         if ((data?.matches || []).length === 0) {
           toast({ title: "No results", description: "No funds found matching your search." });
