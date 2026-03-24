@@ -88,28 +88,24 @@ const Compare = () => {
     [competitorList]
   );
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["compare", year, month + 1, fundType],
     queryFn: async () => {
       const refMonth = `${year}${String(month + 1).padStart(2, "0")}`;
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 55000);
       try {
-        const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/cvm-compare`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: anonKey,
-              Authorization: `Bearer ${anonKey}`,
-            },
-            body: JSON.stringify({ refMonth, fundType }),
-            signal: controller.signal,
-          }
-        );
+        const res = await fetch(`${API_URL}/api/compare`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ refMonth, fundType }),
+          signal: controller.signal,
+        });
         clearTimeout(timeout);
         if (!res.ok) {
           const err = await res.json();
