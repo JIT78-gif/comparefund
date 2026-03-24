@@ -195,8 +195,7 @@ const Admin = () => {
         } else {
           body.searchTerms = [cvmSearchQuery];
         }
-        const { data, error } = await supabase.functions.invoke("cvm-manager-search", { body });
-        if (error) throw error;
+        const data = await apiFetch("/manager-search", { method: "POST", body: JSON.stringify(body) });
         setManagerResults(data?.managers || []);
         setManagerTotalFunds(data?.total_funds || 0);
         if ((data?.managers || []).length === 0) {
