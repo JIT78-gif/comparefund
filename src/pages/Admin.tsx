@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { fetchCompetitors, invokeCompetitorAdmin, type Competitor } from "@/lib/competitors";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Building2, Users, Shield, Search, Loader2, UserCog } from "lucide-react";
 
 interface AuthorizedEmail {
@@ -195,8 +195,7 @@ const Admin = () => {
         } else {
           body.searchTerms = [cvmSearchQuery];
         }
-        const { data, error } = await supabase.functions.invoke("cvm-manager-search", { body });
-        if (error) throw error;
+        const data = await apiFetch("/manager-search", { method: "POST", body: JSON.stringify(body) });
         setManagerResults(data?.managers || []);
         setManagerTotalFunds(data?.total_funds || 0);
         if ((data?.managers || []).length === 0) {
@@ -213,8 +212,7 @@ const Admin = () => {
           body.searchTerms = [cvmSearchQuery];
           body.searchField = cvmSearchField;
         }
-        const { data, error } = await supabase.functions.invoke("cvm-discover", { body });
-        if (error) throw error;
+        const data = await apiFetch("/discover", { method: "POST", body: JSON.stringify(body) });
         setCvmResults(data?.matches || []);
         if ((data?.matches || []).length === 0) {
           toast({ title: "No results", description: "No funds found matching your search." });

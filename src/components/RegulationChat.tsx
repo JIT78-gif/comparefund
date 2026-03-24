@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquareText, Send, Loader2, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { fetchCompetitors } from "@/lib/competitors";
 
 interface Competitor {
   key: string;
@@ -22,12 +23,7 @@ export default function RegulationChat() {
   const { data: competitors = [] } = useQuery<Competitor[]>({
     queryKey: ["competitors-chat"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("competitors")
-        .select("id, name, slug")
-        .eq("status", "active")
-        .order("name");
-      if (error) throw error;
+      const data = await fetchCompetitors();
       return (data || []).map((c) => ({ key: c.slug, label: c.name, id: c.id }));
     },
     staleTime: 5 * 60 * 1000,
@@ -42,15 +38,11 @@ export default function RegulationChat() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
-    if (open && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 300);
-    }
+    if (open && inputRef.current) setTimeout(() => inputRef.current?.focus(), 300);
   }, [open]);
 
   const toggleCompetitor = (key: string) => {
@@ -67,58 +59,20 @@ export default function RegulationChat() {
     setInput("");
     setIsLoading(true);
 
-    let assistantSoFar = "";
-
-    const upsertAssistant = (chunk: string) => {
-      assistantSoFar += chunk;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant") {
-          return prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-          );
-        }
-        return [...prev, { role: "assistant", content: assistantSoFar }];
-      });
-    };
-
     try {
       const competitorIds = selectedCompetitor
-        ? competitors
-            .filter((c) => c.key === selectedCompetitor)
-            .map((c) => c.id)
-            .filter(Boolean)
+        ? competitors.filter((c) => c.key === selectedCompetitor).map((c) => c.id).filter(Boolean)
         : [];
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/n8n-chat-proxy`;
-      const resp = await fetch(url, {
+      const data = await apiFetch("/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({
-          messages: allMessages,
-          competitor_ids: competitorIds,
-        }),
+        body: JSON.stringify({ messages: allMessages, competitor_ids: competitorIds }),
       });
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(err.error || `HTTP ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      upsertAssistant(data.reply || "No response received.");
+      setMessages([...allMessages, { role: "assistant", content: data.reply || "No response received." }]);
     } catch (e) {
       console.error("Chat error:", e);
-      upsertAssistant(
-        `\n\n⚠️ ${e instanceof Error ? e.message : "Error connecting to AI"}`
-      );
+      setMessages([...allMessages, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Error connecting to AI"}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -126,18 +80,11 @@ export default function RegulationChat() {
 
   return (
     <>
-      {/* Floating button */}
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-      >
+      <button onClick={() => setOpen(true)} className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors">
         <MessageSquareText className="h-5 w-5" />
-        <span className="text-sm font-medium hidden sm:inline">
-          {t("chat.regulations")}
-        </span>
+        <span className="text-sm font-medium hidden sm:inline">{t("chat.regulations")}</span>
       </button>
 
-      {/* Chat Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full sm:max-w-[480px] flex flex-col p-0">
           <SheetHeader className="p-4 pb-2 border-b border-border">
@@ -147,26 +94,17 @@ export default function RegulationChat() {
             </SheetTitle>
           </SheetHeader>
 
-          {/* Competitor filter chips */}
           {competitors.length > 0 && (
             <div className="px-4 py-2 flex flex-wrap gap-1.5 border-b border-border">
               {competitors.map((c) => (
-                <Badge
-                  key={c.key}
-                  variant={selectedCompetitor === c.key ? "default" : "outline"}
-                  className="cursor-pointer text-[10px] tracking-wider"
-                  onClick={() => toggleCompetitor(c.key)}
-                >
+                <Badge key={c.key} variant={selectedCompetitor === c.key ? "default" : "outline"} className="cursor-pointer text-[10px] tracking-wider" onClick={() => toggleCompetitor(c.key)}>
                   {c.label}
-                  {selectedCompetitor === c.key && (
-                    <X className="h-3 w-3 ml-1" />
-                  )}
+                  {selectedCompetitor === c.key && <X className="h-3 w-3 ml-1" />}
                 </Badge>
               ))}
             </div>
           )}
 
-          {/* Messages */}
           <ScrollArea className="flex-1 px-4" ref={scrollRef}>
             <div className="py-4 space-y-4">
               {messages.length === 0 && (
@@ -176,17 +114,8 @@ export default function RegulationChat() {
                 </div>
               )}
               {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
-                    }`}
-                  >
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                     {msg.role === "assistant" ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -199,38 +128,16 @@ export default function RegulationChat() {
               ))}
               {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
                 <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg px-3 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  </div>
+                  <div className="bg-muted rounded-lg px-3 py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
                 </div>
               )}
             </div>
           </ScrollArea>
 
-          {/* Input */}
           <div className="p-4 border-t border-border">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-              className="flex gap-2"
-            >
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={t("chat.placeholder")}
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!input.trim() || isLoading}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+            <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex gap-2">
+              <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={t("chat.placeholder")} disabled={isLoading} className="flex-1" />
+              <Button type="submit" size="icon" disabled={!input.trim() || isLoading}><Send className="h-4 w-4" /></Button>
             </form>
           </div>
         </SheetContent>

@@ -1,67 +1,54 @@
 # FIDC Intel
 
-## Project info
+## Local Setup (Pure PostgreSQL + Express)
 
-**URL**: https://comparefund.lovable.app
+### Prerequisites
+- Node.js 18+
+- Docker (for PostgreSQL)
 
-## How can I edit this code?
+### 1. Start PostgreSQL
+```bash
+docker-compose up -d
+```
 
-There are several ways of editing this application.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 2. Start the Backend
+```bash
+cd server
+npm install
+cp .env.example .env  # Edit with your settings
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Create a `server/.env` file:
+```
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fidc_intel
+JWT_SECRET=your-secret-key-here
+GEMINI_API_KEY=your-gemini-key  # Optional, for AI chat
+N8N_WEBHOOK_URL=               # Optional, for n8n chat proxy
+PORT=3001
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3. Start the Frontend
+```bash
+npm install
+npm run dev
+```
 
-**Use GitHub Codespaces**
+Create/update `.env`:
+```
+VITE_API_URL=http://localhost:3001
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 4. Create Admin User
+Register via the UI, then manually grant admin:
+```bash
+psql postgresql://postgres:postgres@localhost:5432/fidc_intel -c "
+  INSERT INTO user_roles (user_id, role)
+  SELECT id, 'admin' FROM users WHERE email = 'your@email.com';
+"
+```
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open the project and click on Share -> Publish.
-
-## Can I connect a custom domain to this project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Tech Stack
+- **Frontend**: React, Vite, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Express.js, PostgreSQL (pg), JWT auth
+- **Data**: CVM public datasets (FIDC monthly reports)
