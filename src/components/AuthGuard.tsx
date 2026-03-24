@@ -1,30 +1,29 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import type { Session } from "@supabase/supabase-js";
+import { isAuthenticated, getMe } from "@/lib/api";
 
 interface AuthGuardProps {
   children: React.ReactNode;
 }
 
 const AuthGuard = ({ children }: AuthGuardProps) => {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [checked, setChecked] = useState(false);
+  const [authed, setAuthed] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    if (!isAuthenticated()) {
+      setAuthed(false);
+      setChecked(true);
+      return;
+    }
+    getMe()
+      .then(() => setAuthed(true))
+      .catch(() => setAuthed(false))
+      .finally(() => setChecked(true));
   }, []);
 
-  // Loading state
-  if (session === undefined) {
+  if (!checked) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground text-sm font-mono tracking-wider">Loading...</div>
@@ -32,8 +31,7 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
     );
   }
 
-  // Not authenticated
-  if (!session) {
+  if (!authed) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
