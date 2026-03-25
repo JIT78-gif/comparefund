@@ -141,7 +141,7 @@ CREATE OR REPLACE FUNCTION search_regulations(
   SELECT
     c.id, c.document_id, d.competitor_id,
     comp.name, d.title, c.content,
-    ts_rank(c.search_vector, plainto_tsquery('portuguese', query_text))::REAL
+    ts_rank(c.search_vector, plainto_tsquery('portuguese', query_text))::REAL AS rank
   FROM regulation_chunks c
   JOIN regulation_documents d ON d.id = c.document_id
   JOIN competitors comp ON comp.id = d.competitor_id
