@@ -6,7 +6,6 @@
     "dev": "tsx watch index.ts",
     "start": "tsx index.ts",
     "migrate-supabase": "tsx scripts/migrate-supabase-data.ts",
-    "seed-competitors": "tsx scripts/seed-competitors.ts",
     "grant-admin": "tsx scripts/grant-admin.ts"
   },
   "dependencies": {

@@ -30,6 +30,7 @@ import discoverRoutes from "./routes/discover.js";
 import managerSearchRoutes from "./routes/manager-search.js";
 import chatRoutes from "./routes/chat.js";
 import pool from "./db.js";
+import { seedIfEmpty } from "./seed.js";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001");
@@ -61,6 +62,7 @@ async function ensureSchema() {
 async function start() {
   try {
     await ensureSchema();
+    await seedIfEmpty();
     app.listen(PORT, () => {
       console.log(`🚀 FIDC Intel API running on http://localhost:${PORT}`);
     });
