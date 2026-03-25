@@ -15,11 +15,10 @@ docker-compose up -d
 ```bash
 cd server
 npm install
-cp .env.example .env  # Edit with your settings
 npm run dev
 ```
 
-Create a `server/.env` file:
+Optional `server/.env` file:
 ```
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fidc_intel
 JWT_SECRET=your-secret-key-here
@@ -38,6 +37,16 @@ Create/update `.env`:
 ```
 VITE_API_URL=http://localhost:3001
 ```
+
+### If Docker was started before this fix
+If your local database was initialized with an older broken schema, reset it once:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+The backend now auto-applies `server/schema.sql` on startup, so missing tables like `users` are recreated automatically.
 
 ### 4. Create Admin User
 Register via the UI, then manually grant admin:

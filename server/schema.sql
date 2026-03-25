@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS regulation_chunks (
   document_id UUID NOT NULL REFERENCES regulation_documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768),
+  embedding JSONB,
   search_vector TSVECTOR,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
