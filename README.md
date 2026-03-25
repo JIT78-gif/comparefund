@@ -26,8 +26,7 @@ npm run dev
 ```
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fidc_intel
 JWT_SECRET=your-secret-key-here
-GEMINI_API_KEY=your-gemini-key  # Optional, for AI chat
-N8N_WEBHOOK_URL=               # Optional, for n8n chat proxy
+N8N_WEBHOOK_URL=your-n8n-webhook-url  # Required for the Regulations chat
 PORT=3001
 ```
 

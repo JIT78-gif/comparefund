@@ -1,8 +1,27 @@
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Load server/.env before anything else
+const __envDir = dirname(fileURLToPath(import.meta.url));
+try {
+  const envContent = readFileSync(resolve(__envDir, ".env"), "utf8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+    if (!(key in process.env)) process.env[key] = val;
+  }
+} catch { /* no .env file, use system env */ }
+
 import express from "express";
 import cors from "cors";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import authRoutes from "./routes/auth.js";
 import competitorRoutes from "./routes/competitors.js";
 import statementsRoutes from "./routes/statements.js";
@@ -14,8 +33,7 @@ import pool from "./db.js";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001");
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = __envDir;
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
