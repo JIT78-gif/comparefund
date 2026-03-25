@@ -24,8 +24,20 @@ export async function apiFetch<T = any>(path: string, options: RequestInit = {})
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
-  const data = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      message.includes("Failed to fetch")
+        ? `Cannot connect to local API at ${API_URL}. Start the backend with \`cd server && npm run dev\`.`
+        : message
+    );
+  }
+
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const data = isJson ? await res.json() : { error: await res.text() };
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data as T;
 }

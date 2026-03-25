@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import MetricCard from "@/components/MetricCard";
+import { apiFetch } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/format";
@@ -88,33 +89,14 @@ const Compare = () => {
     [competitorList]
   );
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["compare", year, month + 1, fundType],
     queryFn: async () => {
       const refMonth = `${year}${String(month + 1).padStart(2, "0")}`;
-      const token = localStorage.getItem("auth_token");
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 55000);
-      try {
-        const res = await fetch(`${API_URL}/api/compare`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ refMonth, fundType }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || `HTTP ${res.status}`);
-        }
-        return (await res.json()) as CompareResponse;
-      } finally {
-        clearTimeout(timeout);
-      }
+      return apiFetch<CompareResponse>("/compare", {
+        method: "POST",
+        body: JSON.stringify({ refMonth, fundType }),
+      });
     },
     retry: 1,
     staleTime: 1000 * 60 * 30,
