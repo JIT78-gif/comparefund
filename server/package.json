@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "tsx watch index.ts",
     "start": "tsx index.ts",
-    "migrate-supabase": "tsx scripts/migrate-supabase-data.ts",
     "grant-admin": "tsx scripts/grant-admin.ts"
   },
   "dependencies": {
