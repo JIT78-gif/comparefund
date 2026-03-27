@@ -7,13 +7,18 @@ const router = Router();
 let CNPJS: Record<string, string[]> = {};
 let NP_OVERRIDE: Set<string> = new Set();
 
+let ALL_COMPETITOR_SLUGS: string[] = [];
+
 async function loadCompetitors() {
-  const { rows } = await pool.query(
-    "SELECT c.slug, cc.cnpj, cc.fund_type_override, cc.status FROM competitors c JOIN competitor_cnpjs cc ON cc.competitor_id = c.id WHERE c.status = 'active'"
-  );
+  const [cnpjRows, slugRows] = await Promise.all([
+    pool.query(
+      "SELECT c.slug, cc.cnpj, cc.fund_type_override, cc.status FROM competitors c JOIN competitor_cnpjs cc ON cc.competitor_id = c.id WHERE c.status = 'active'"
+    ),
+    pool.query("SELECT slug FROM competitors WHERE status = 'active'"),
+  ]);
   const cnpjs: Record<string, string[]> = {};
   const npSet = new Set<string>();
-  for (const row of rows) {
+  for (const row of cnpjRows.rows) {
     if (row.status !== "active") continue;
     if (!cnpjs[row.slug]) cnpjs[row.slug] = [];
     cnpjs[row.slug].push(row.cnpj);
@@ -21,6 +26,7 @@ async function loadCompetitors() {
   }
   CNPJS = cnpjs;
   NP_OVERRIDE = npSet;
+  ALL_COMPETITOR_SLUGS = slugRows.rows.map((r: any) => r.slug);
 }
 
 function cleanCnpj(raw: string): string { return raw.replace(/[.\-\/]/g, ""); }
@@ -209,7 +215,7 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const results: Record<string, any> = {};
-    for (const company of Object.keys(CNPJS)) {
+    for (const company of ALL_COMPETITOR_SLUGS) {
       results[company] = { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType || "STANDARD", cash: 0, shareholders: 0 };
     }
     for (const d of details) {

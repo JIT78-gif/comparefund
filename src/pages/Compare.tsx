@@ -104,10 +104,12 @@ const Compare = () => {
 
   const years = Array.from({ length: 15 }, (_, i) => 2013 + i);
 
+  const ZERO_DATA: CompanyData = { net_assets: 0, portfolio: 0, overdue: 0, delinquency: 0, unit_value: 0, fund_count: 0, liabilities: 0, fund_type: fundType, cash: 0, shareholders: 0 };
+
   const chartData = data
     ? COMPANIES.map((c) => {
-      const d = (data as Record<string, CompanyData>)[c.key];
-      return d ? {
+      const d = (data as Record<string, CompanyData>)[c.key] ?? ZERO_DATA;
+      return {
         name: c.label,
         assets: d.net_assets,
         delinquency: d.delinquency,
@@ -115,15 +117,15 @@ const Compare = () => {
         receivables: d.portfolio,
         cash: d.cash,
         shareholders: d.shareholders,
-      } : null;
-    }).filter(Boolean)
+      };
+    })
     : [];
 
   const tableRows = data
     ? COMPANIES.map((c) => {
-      const d = (data as Record<string, CompanyData>)[c.key];
-      return d ? { name: c.label, color: c.color, ...d } : null;
-    }).filter(Boolean) as ({ name: string; color: string } & CompanyData)[]
+      const d = (data as Record<string, CompanyData>)[c.key] ?? ZERO_DATA;
+      return { name: c.label, color: c.color, ...d };
+    })
     : [];
 
   const tooltipStyle = {
@@ -215,18 +217,17 @@ const Compare = () => {
           </div>
         )}
 
-        {data && chartData.length === 0 && (
+        {data && COMPANIES.length === 0 && (
           <div className="border border-border bg-card p-8 rounded-sm text-center text-muted-foreground text-sm mb-8">
             {t("compare.noData")}
           </div>
         )}
 
-        {data && chartData.length > 0 && (
+        {data && COMPANIES.length > 0 && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
-                const d = (data as Record<string, CompanyData>)[c.key];
-                if (!d) return null;
+                const d = (data as Record<string, CompanyData>)[c.key] ?? ZERO_DATA;
                 return (
                   <MetricCard
                     key={`${c.key}-pl`}
@@ -242,8 +243,7 @@ const Compare = () => {
             {/* Metric Cards — Row 2: Delinquency */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
               {COMPANIES.map((c) => {
-                const d = (data as Record<string, CompanyData>)[c.key];
-                if (!d) return null;
+                const d = (data as Record<string, CompanyData>)[c.key] ?? ZERO_DATA;
                 return (
                   <MetricCard
                     key={`${c.key}-delinq`}
@@ -259,8 +259,7 @@ const Compare = () => {
             {/* Metric Cards — Row 3: Cash & Shareholders */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               {COMPANIES.map((c) => {
-                const d = (data as Record<string, CompanyData>)[c.key];
-                if (!d) return null;
+                const d = (data as Record<string, CompanyData>)[c.key] ?? ZERO_DATA;
                 return (
                   <MetricCard
                     key={`${c.key}-cash`}
